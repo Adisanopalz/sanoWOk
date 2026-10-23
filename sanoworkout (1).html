@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SanoWorkOut - Rep Counter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Mencegah double-tap zoom pada mobile agar tombol bisa ditekan cepat */
+        .touch-manipulation {
+            touch-action: manipulation;
+        }
+        /* Mencegah seleksi teks saat menekan tombol berulang-ulang */
+        .no-select {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        
+        /* Animasi Pop untuk angka saat diupdate */
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); color: #10b981; }
+            100% { transform: scale(1); }
+        }
+        .animate-pop {
+            animation: pop 0.3s ease-out;
+        }
+
+        /* Animasi Selebrasi saat Set selesai */
+        @keyframes celebrate {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            50% { transform: scale(1.03); box-shadow: 0 0 25px 10px rgba(16, 185, 129, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+        .animate-celebrate {
+            animation: celebrate 0.5s ease-out;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* Scrollbar tersembunyi tapi tetap bisa scroll */
+        ::-webkit-scrollbar {
+            width: 0px;
+            background: transparent;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen pb-24 relative overflow-x-hidden">
+
+    <!-- Header -->
+    <header class="bg-gray-800 p-5 sticky top-0 shadow-lg z-20 flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <div class="bg-emerald-500 text-gray-900 p-2 rounded-xl">
+                <i class="fas fa-dumbbell text-xl"></i>
+            </div>
+            <h1 class="text-2xl font-bold tracking-wide">Sano<span class="text-emerald-400">WorkOut</span></h1>
+        </div>
+        <button id="resetAllBtn" class="text-gray-400 hover:text-red-400 p-2 active:scale-95 transition-transform" title="Reset Semua Reps">
+            <i class="fas fa-rotate-right text-xl"></i>
+        </button>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="p-4" id="exerciseContainer">
+        <!-- Kartu gerakan akan di-render di sini oleh JavaScript -->
+    </main>
+
+    <!-- State Kosong (Ditampilkan jika tidak ada gerakan) -->
+    <div id="emptyState" class="hidden flex-col items-center justify-center mt-20 text-gray-500 px-6 text-center">
+        <i class="fas fa-clipboard-list text-6xl mb-4 text-gray-700"></i>
+        <p class="text-lg mb-2 text-gray-300 font-semibold">Belum Ada Gerakan</p>
+        <p class="text-sm">Mulai tambahkan custom gerakan Anda dengan menekan tombol + di bawah.</p>
+    </div>
+
+    <!-- Floating Action Button (FAB) untuk tambah gerakan -->
+    <button id="addExerciseFab" class="fixed bottom-6 right-6 bg-emerald-500 text-white w-16 h-16 rounded-full shadow-xl shadow-emerald-500/30 flex items-center justify-center text-2xl active:scale-90 transition-transform z-30 touch-manipulation hover:bg-emerald-400">
+        <i class="fas fa-plus"></i>
+    </button>
+
+    <!-- Modal Tambah Gerakan -->
+    <div id="addModal" class="fixed inset-0 bg-black/70 z-50 hidden flex-col items-center justify-center px-4 backdrop-blur-sm transition-opacity duration-300 opacity-0">
+        <div class="bg-gray-800 rounded-3xl w-full max-w-sm p-6 shadow-2xl transform scale-95 transition-transform duration-300" id="modalContent">
+            <div class="flex justify-between items-center mb-5">
+                <h2 class="text-xl font-bold">Tambah Gerakan Baru</h2>
+                <button id="closeModalBtn" class="text-gray-400 hover:text-white p-2">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <label class="block text-gray-400 text-sm mb-2 ml-1">Nama Gerakan</label>
+            <input type="text" id="exerciseNameInput" placeholder="Contoh: Push Up, Sit Up" class="w-full bg-gray-900 border border-gray-700 text-white rounded-2xl px-4 py-4 mb-5 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-lg transition-all shadow-inner">
+            
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                    <label class="block text-gray-400 text-sm mb-2 ml-1">Target Reps</label>
+                    <input type="number" id="targetRepsInput" value="10" min="1" class="w-full bg-gray-900 border border-gray-700 text-white rounded-2xl px-4 py-3 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-2xl text-center font-black transition-all shadow-inner">
+                </div>
+                <div>
+                    <label class="block text-gray-400 text-sm mb-2 ml-1">Total Set</label>
+                    <input type="number" id="targetSetsInput" value="3" min="1" class="w-full bg-gray-900 border border-gray-700 text-white rounded-2xl px-4 py-3 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-2xl text-center font-black transition-all shadow-inner">
+                </div>
+            </div>
+            
+            <button id="saveExerciseBtn" class="w-full bg-emerald-500 text-gray-900 font-black rounded-2xl py-4 text-lg active:scale-95 transition-transform shadow-lg shadow-emerald-500/20">
+                Simpan Gerakan
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // State Management
+        let rawData = JSON.parse(localStorage.getItem('sano_exercises')) || [];
+        
+        // Auto-Migrasi data lama ke struktur baru (mendukung set & reps)
+        let exercises = rawData.map(ex => {
+            if (ex.targetReps === undefined) {
+                return {
+                    id: ex.id,
+                    name: ex.name,
+                    currentRep: ex.reps || 0,
+                    targetReps: 10,
+                    currentSet: 1,
+                    targetSets: 3
+                };
+            }
+            return ex;
+        });
+
+        if (exercises.length === 0) {
+            exercises = [
+                { id: 1, name: 'Push Up', currentRep: 0, targetReps: 12, currentSet: 1, targetSets: 3 },
+                { id: 2, name: 'Sit Up', currentRep: 0, targetReps: 15, currentSet: 1, targetSets: 3 }
+            ];
+        }
+
+        // DOM Elements
+        const container = document.getElementById('exerciseContainer');
+        const emptyState = document.getElementById('emptyState');
+        const addModal = document.getElementById('addModal');
+        const modalContent = document.getElementById('modalContent');
+        const addExerciseFab = document.getElementById('addExerciseFab');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const saveExerciseBtn = document.getElementById('saveExerciseBtn');
+        const exerciseNameInput = document.getElementById('exerciseNameInput');
+        const targetRepsInput = document.getElementById('targetRepsInput');
+        const targetSetsInput = document.getElementById('targetSetsInput');
+        const resetAllBtn = document.getElementById('resetAllBtn');
+
+        function triggerVibration(duration = 50) {
+            if ("vibrate" in navigator) {
+                navigator.vibrate(duration);
+            }
+        }
+
+        function renderExercises() {
+            container.innerHTML = '';
+            
+            if (exercises.length === 0) {
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+            } else {
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+                
+                exercises.forEach(ex => {
+                    const isDone = ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps;
+                    const progressPercentage = (ex.currentRep / ex.targetReps) * 100;
+
+                    const card = document.createElement('div');
+                    card.id = `card-${ex.id}`;
+                    // Kartu dibuat lebih rounded dan punya state warna khusus jika selesai
+                    card.className = `bg-gray-800 rounded-[2.5rem] p-6 mb-6 shadow-xl border border-gray-700/50 flex flex-col gap-3 relative overflow-hidden transition-all duration-500 ${isDone ? 'ring-2 ring-emerald-500/50 bg-gradient-to-br from-gray-800 to-emerald-900/30' : ''}`;
+                    
+                    card.innerHTML = `
+                        <!-- Header Card -->
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="text-2xl font-black text-gray-100 uppercase tracking-tight">${ex.name}</h3>
+                                <div id="set-display-${ex.id}" class="inline-block mt-1 text-xs font-bold ${isDone ? 'bg-emerald-500 text-gray-900' : 'bg-gray-700 text-emerald-400'} px-3 py-1 rounded-full uppercase tracking-wider transition-colors duration-300">
+                                    ${isDone ? 'COMPLETED' : `SET ${ex.currentSet} / ${ex.targetSets}`}
+                                </div>
+                            </div>
+                            <button onclick="deleteExercise(${ex.id})" class="text-gray-500 hover:text-red-400 p-2 bg-gray-900/50 rounded-full active:scale-90 transition-transform">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Rep Counter & Progress Bar -->
+                        <div class="py-3">
+                            <div class="flex items-baseline gap-2 mb-4">
+                                <span id="rep-display-${ex.id}" class="text-7xl font-black text-white tabular-nums tracking-tighter">${ex.currentRep}</span>
+                                <span class="text-2xl font-bold text-gray-500">/ ${ex.targetReps}</span>
+                                <span class="text-base font-medium text-gray-400 ml-1">reps</span>
+                            </div>
+                            
+                            <!-- Progress Bar Kekinian -->
+                            <div class="w-full bg-gray-900 h-5 rounded-full p-1 overflow-hidden shadow-inner">
+                                <div id="progress-bar-${ex.id}" class="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-500 ease-out relative" style="width: ${isDone ? 100 : progressPercentage}%">
+                                    <div class="absolute top-0 left-0 right-0 h-1/2 bg-white/20 rounded-full"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Controls -->
+                        <div class="flex gap-3 mt-1">
+                            <button onclick="decrement(${ex.id})" class="bg-gray-700/50 active:bg-gray-600 hover:bg-gray-600 rounded-[1.5rem] w-[4.5rem] flex items-center justify-center text-2xl text-gray-400 touch-manipulation no-select active:scale-95 transition-all">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <button onclick="increment(${ex.id})" id="btn-inc-${ex.id}" class="flex-1 ${isDone ? 'bg-gray-700 text-gray-500' : 'bg-emerald-500 text-gray-900 shadow-lg shadow-emerald-500/20 active:bg-emerald-400 hover:bg-emerald-400'} rounded-[1.5rem] py-4 flex flex-col items-center justify-center font-black touch-manipulation no-select active:scale-[0.96] transition-all" ${isDone ? 'disabled' : ''}>
+                                <i class="fas fa-plus text-3xl mb-1"></i>
+                                <span class="text-[10px] uppercase tracking-widest opacity-80">Tap</span>
+                            </button>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            }
+        }
+
+        window.increment = function(id) {
+            const index = exercises.findIndex(ex => ex.id === id);
+            if (index !== -1) {
+                let ex = exercises[index];
+                
+                // Cegah penambahan jika sudah selesai semuanya
+                if (ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps) return;
+
+                ex.currentRep += 1;
+                
+                // Cek apakah mencapai target reps untuk set ini
+                if (ex.currentRep >= ex.targetReps) {
+                    if (ex.currentSet < ex.targetSets) {
+                        // Lanjut ke set berikutnya
+                        ex.currentSet += 1;
+                        ex.currentRep = 0; 
+                        triggerVibration([30, 50, 30]); // Getaran beda untuk ganti set
+                        
+                        // Mainkan animasi selebrasi di kartu
+                        const card = document.getElementById(`card-${id}`);
+                        if(card) {
+                            card.classList.remove('animate-celebrate');
+                            void card.offsetWidth;
+                            card.classList.add('animate-celebrate');
+                        }
+                    } else {
+                        // Selesai seluruh Set & Reps!
+                        ex.currentRep = ex.targetReps;
+                        triggerVibration([100, 50, 100, 50, 100]); // Getaran panjang
+                    }
+                } else {
+                    triggerVibration(40);
+                }
+                
+                saveData();
+                updateDisplay(id, true);
+            }
+        }
+
+        window.decrement = function(id) {
+            const index = exercises.findIndex(ex => ex.id === id);
+            if (index !== -1) {
+                let ex = exercises[index];
+                
+                if (ex.currentRep > 0) {
+                    ex.currentRep -= 1;
+                    updateDisplay(id, false);
+                    triggerVibration(20);
+                    saveData();
+                } else if (ex.currentSet > 1) {
+                    // Mundur ke set sebelumnya jika reps 0 (fitur Undo)
+                    ex.currentSet -= 1;
+                    ex.currentRep = ex.targetReps - 1;
+                    updateDisplay(id, false);
+                    triggerVibration(20);
+                    saveData();
+                }
+            }
+        }
+
+        window.deleteExercise = function(id) {
+            if(confirm('Hapus gerakan ini?')) {
+                exercises = exercises.filter(ex => ex.id !== id);
+                triggerVibration([30, 50, 30]);
+                saveData();
+                renderExercises();
+            }
+        }
+
+        // Update UI Dinamis tanpa harus re-render seluruh daftar
+        function updateDisplay(id, animate = true) {
+            const ex = exercises.find(e => e.id === id);
+            if (!ex) return;
+
+            const repDisplay = document.getElementById(`rep-display-${id}`);
+            const setDisplay = document.getElementById(`set-display-${id}`);
+            const progressBar = document.getElementById(`progress-bar-${id}`);
+            const card = document.getElementById(`card-${id}`);
+            const btnInc = document.getElementById(`btn-inc-${id}`);
+            const isDone = ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps;
+
+            if (repDisplay) {
+                repDisplay.innerText = ex.currentRep;
+                if(animate) {
+                    repDisplay.classList.remove('animate-pop');
+                    void repDisplay.offsetWidth; 
+                    repDisplay.classList.add('animate-pop');
+                }
+            }
+
+            if (setDisplay) {
+                if (isDone) {
+                    setDisplay.innerText = 'COMPLETED';
+                    setDisplay.className = 'inline-block mt-1 text-xs font-bold bg-emerald-500 text-gray-900 px-3 py-1 rounded-full uppercase tracking-wider transition-colors duration-300';
+                } else {
+                    setDisplay.innerText = `SET ${ex.currentSet} / ${ex.targetSets}`;
+                    setDisplay.className = 'inline-block mt-1 text-xs font-bold bg-gray-700 text-emerald-400 px-3 py-1 rounded-full uppercase tracking-wider transition-colors duration-300';
+                }
+            }
+
+            if (progressBar) {
+                let percentage = (ex.currentRep / ex.targetReps) * 100;
+                progressBar.style.width = `${isDone ? 100 : percentage}%`;
+            }
+
+            if (card) {
+                if (isDone) {
+                    card.classList.add('ring-2', 'ring-emerald-500/50', 'bg-gradient-to-br', 'from-gray-800', 'to-emerald-900/30');
+                } else {
+                    card.classList.remove('ring-2', 'ring-emerald-500/50', 'bg-gradient-to-br', 'from-gray-800', 'to-emerald-900/30');
+                }
+            }
+
+            if (btnInc) {
+                if (isDone) {
+                    btnInc.disabled = true;
+                    btnInc.className = 'flex-1 bg-gray-700 text-gray-500 rounded-[1.5rem] py-4 flex flex-col items-center justify-center font-black transition-all';
+                } else {
+                    btnInc.disabled = false;
+                    btnInc.className = 'flex-1 bg-emerald-500 text-gray-900 shadow-lg shadow-emerald-500/20 active:bg-emerald-400 hover:bg-emerald-400 rounded-[1.5rem] py-4 flex flex-col items-center justify-center font-black touch-manipulation no-select active:scale-[0.96] transition-all';
+                }
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('sano_exercises', JSON.stringify(exercises));
+        }
+
+        resetAllBtn.addEventListener('click', () => {
+            if(exercises.length === 0) return;
+            if(confirm('Reset semua hitungan gerakan ke awal (Set 1, Rep 0)?')) {
+                exercises = exercises.map(ex => ({...ex, currentRep: 0, currentSet: 1}));
+                saveData();
+                renderExercises();
+                triggerVibration(100);
+            }
+        });
+
+        // Modal Logic
+        function openModal() {
+            addModal.classList.remove('hidden');
+            addModal.classList.add('flex');
+            setTimeout(() => {
+                addModal.classList.remove('opacity-0');
+                modalContent.classList.remove('scale-95');
+                modalContent.classList.add('scale-100');
+                exerciseNameInput.focus();
+            }, 10);
+        }
+
+        function closeModal() {
+            addModal.classList.add('opacity-0');
+            modalContent.classList.remove('scale-100');
+            modalContent.classList.add('scale-95');
+            
+            setTimeout(() => {
+                addModal.classList.add('hidden');
+                addModal.classList.remove('flex');
+                exerciseNameInput.value = '';
+                targetRepsInput.value = '10';
+                targetSetsInput.value = '3';
+            }, 300);
+        }
+
+        addExerciseFab.addEventListener('click', openModal);
+        closeModalBtn.addEventListener('click', closeModal);
+        addModal.addEventListener('click', (e) => {
+            if (e.target === addModal) closeModal();
+        });
+
+        function addNewExercise() {
+            const name = exerciseNameInput.value.trim();
+            const targetReps = parseInt(targetRepsInput.value) || 10;
+            const targetSets = parseInt(targetSetsInput.value) || 3;
+
+            if (name) {
+                const newId = exercises.length > 0 ? Math.max(...exercises.map(ex => ex.id)) + 1 : 1;
+                exercises.push({
+                    id: newId,
+                    name: name,
+                    currentRep: 0,
+                    targetReps: targetReps,
+                    currentSet: 1,
+                    targetSets: targetSets
+                });
+                saveData();
+                renderExercises();
+                closeModal();
+                triggerVibration(50);
+                
+                setTimeout(() => {
+                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                }, 300);
+            } else {
+                exerciseNameInput.focus();
+                exerciseNameInput.classList.add('border-red-500', 'ring-red-500');
+                setTimeout(() => {
+                    exerciseNameInput.classList.remove('border-red-500', 'ring-red-500');
+                }, 1000);
+            }
+        }
+
+        saveExerciseBtn.addEventListener('click', addNewExercise);
+        
+        // Inisialisasi Pertama
+        renderExercises();
+
+    </script>
+</body>
+</html>
