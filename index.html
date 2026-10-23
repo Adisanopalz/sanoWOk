@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+[<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
@@ -233,6 +233,14 @@
         <div id="restTimeDisplay" class="text-6xl font-black text-white tabular-nums tracking-tighter mb-4 drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]">
             01:00
         </div>
+        
+        <!-- INTEGRASI API 1: Sigma Mindset Quotes -->
+        <div class="w-full bg-slate-900/50 rounded-xl p-4 mb-5 border border-slate-700/50 shadow-inner relative overflow-hidden">
+            <div class="absolute -right-4 -top-4 text-slate-800/30 text-5xl"><i class="fas fa-quote-right"></i></div>
+            <p class="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mb-1 relative z-10"><i class="fas fa-fire mr-1"></i> Sigma Mindset (API)</p>
+            <p id="sigmaQuote" class="text-sm text-slate-300 italic relative z-10 transition-opacity duration-300">"Menyambungkan ke satelit Sigma..."</p>
+        </div>
+
         <div class="flex gap-4 w-full">
             <button onclick="addRestTime(30)" class="flex-1 bg-slate-800 text-slate-300 py-3 rounded-xl font-bold text-sm active:scale-95 transition-all shadow-inner">+30d</button>
             <button onclick="skipRest()" class="flex-2 bg-emerald-500 text-slate-900 py-3 px-8 rounded-xl font-black text-sm active:scale-95 transition-all btn-glow w-full">Gas Lagi!</button>
@@ -308,8 +316,16 @@
             </div>
             <div class="space-y-5">
                 <div>
-                    <label class="block text-slate-400 text-xs font-bold uppercase tracking-wider mb-2 ml-1">Nama Latihan</label>
+                    <!-- INTEGRASI API 2: Wger Fitness DB -->
+                    <div class="flex justify-between items-center mb-2 ml-1">
+                        <label class="block text-slate-400 text-xs font-bold uppercase tracking-wider">Nama Latihan</label>
+                        <button onclick="fetchAPIExercises()" class="text-[10px] text-emerald-400 bg-emerald-900/30 px-3 py-1.5 rounded-full font-bold hover:bg-emerald-500 hover:text-slate-900 active:scale-90 transition-all border border-emerald-500/30"><i class="fas fa-cloud-download-alt mr-1"></i> Inspirasi API</button>
+                    </div>
                     <input type="text" id="exName" placeholder="Contoh: Push Up" class="w-full bg-slate-900 border border-slate-700 text-white rounded-2xl px-5 py-4 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-lg shadow-inner placeholder-slate-600 transition-all">
+                    
+                    <!-- Container Hasil API -->
+                    <div id="apiLoading" class="hidden text-center text-xs text-emerald-400 font-bold tracking-widest uppercase my-3"><i class="fas fa-circle-notch fa-spin mr-1"></i> Mengambil data WGER API...</div>
+                    <div id="apiResults" class="hidden max-h-40 overflow-y-auto bg-slate-900/80 border border-slate-700 rounded-xl mt-3 p-2 space-y-2 shadow-inner custom-scrollbar"></div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
@@ -702,6 +718,7 @@
         const restSheet = document.getElementById('restTimerSheet'), restDisplay = document.getElementById('restTimeDisplay');
         function startRestTimer(seconds) {
             restSeconds = seconds; updateRestUI(); restSheet.classList.add('active');
+            fetchSigmaQuote(); // Panggil API Quotes setiap kali istirahat dimulai
             clearInterval(restInterval);
             restInterval = setInterval(() => {
                 restSeconds--; updateRestUI();
@@ -746,7 +763,14 @@
         // Add
         const addModal = document.getElementById('addModal'), modalContentAdd = document.getElementById('modalContent');
         window.openModal = function() { initAudio(); addModal.classList.remove('hidden'); addModal.classList.add('flex'); setTimeout(() => { addModal.classList.remove('opacity-0'); modalContentAdd.classList.remove('translate-y-full', 'sm:scale-95'); document.getElementById('exName').focus(); }, 10); }
-        window.closeModal = function() { addModal.classList.add('opacity-0'); modalContentAdd.classList.add('translate-y-full', 'sm:scale-95'); setTimeout(() => { addModal.classList.add('hidden'); addModal.classList.remove('flex'); document.getElementById('exName').value = ''; }, 300); }
+        window.closeModal = function() { 
+            addModal.classList.add('opacity-0'); modalContentAdd.classList.add('translate-y-full', 'sm:scale-95'); 
+            setTimeout(() => { 
+                addModal.classList.add('hidden'); addModal.classList.remove('flex'); 
+                document.getElementById('exName').value = ''; 
+                document.getElementById('apiResults').classList.add('hidden'); // Sembunyikan hasil API saat modal ditutup
+            }, 300); 
+        }
         window.saveNewExercise = function() {
             const name = document.getElementById('exName').value.trim(), reps = parseInt(document.getElementById('exReps').value) || 10, sets = parseInt(document.getElementById('exSets').value) || 3;
             if (name) {
@@ -783,10 +807,84 @@
         }
         window.closeSummary = function() { summaryOverlay.classList.add('opacity-0'); setTimeout(() => { summaryOverlay.classList.add('hidden'); summaryOverlay.classList.remove('flex'); }, 1000); }
 
+        // --- PUBLIC API INTEGRATIONS ---
+        
+        // 1. Fetch Motivational Quotes API
+        async function fetchSigmaQuote() {
+            const quoteEl = document.getElementById('sigmaQuote');
+            quoteEl.style.opacity = 0.5;
+            quoteEl.innerText = "Mengambil energi Sigma dari API...";
+            try {
+                // Menggunakan free API dari dummyjson
+                const response = await fetch('https://dummyjson.com/quotes/random');
+                const data = await response.json();
+                quoteEl.innerText = `"${data.quote}"\n— ${data.author}`;
+                quoteEl.style.opacity = 1;
+            } catch(e) {
+                // Fallback jika API sedang down/tidak ada internet
+                quoteEl.innerText = '"Konsistensi mengalahkan intensitas yang cuma sehari."\n— SanoWorkOut';
+                quoteEl.style.opacity = 1;
+            }
+        }
+
+        // 2. Fetch WGER Exercise API
+        window.fetchAPIExercises = async function() {
+            const resContainer = document.getElementById('apiResults');
+            const loadingEl = document.getElementById('apiLoading');
+            
+            // Toggle visibility
+            if(!resContainer.classList.contains('hidden') || !loadingEl.classList.contains('hidden')) {
+                resContainer.classList.add('hidden');
+                loadingEl.classList.add('hidden');
+                return;
+            }
+
+            resContainer.classList.add('hidden');
+            loadingEl.classList.remove('hidden');
+            
+            try {
+                // Fetch dari wger.de (Open Source Fitness API), bahasa Inggris (language=2)
+                // Kita ambil random offset agar setiap klik rekomendasinya bisa berbeda
+                const randomOffset = Math.floor(Math.random() * 200); 
+                const response = await fetch(`https://wger.de/api/v2/exerciseinfo/?language=2&limit=8&offset=${randomOffset}`);
+                const data = await response.json();
+                
+                resContainer.innerHTML = '';
+                
+                if(data.results && data.results.length > 0) {
+                    data.results.forEach(ex => {
+                        const btn = document.createElement('button');
+                        btn.className = 'w-full text-left bg-slate-800 hover:bg-emerald-900/50 p-3 rounded-xl text-sm text-white transition-all border border-slate-700 hover:border-emerald-500 flex flex-col gap-1 active:scale-[0.98]';
+                        
+                        // Membersihkan nama API jika ada tag HTML
+                        const cleanName = ex.name.replace(/<[^>]*>?/gm, '');
+                        const catName = ex.category.name || 'General';
+                        
+                        btn.innerHTML = `<span class="font-bold text-emerald-400 text-base leading-none">${cleanName}</span> <span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">${catName}</span>`;
+                        btn.onclick = () => {
+                            document.getElementById('exName').value = cleanName;
+                            resContainer.classList.add('hidden');
+                            vibe(30);
+                        };
+                        resContainer.appendChild(btn);
+                    });
+                } else {
+                    throw new Error("No data");
+                }
+                
+                loadingEl.classList.add('hidden');
+                resContainer.classList.remove('hidden');
+            } catch(e) {
+                loadingEl.classList.add('hidden');
+                resContainer.classList.remove('hidden');
+                resContainer.innerHTML = '<p class="text-xs text-red-400 font-bold p-3 text-center bg-red-900/20 rounded-xl border border-red-500/30">API WGER gagal diakses. Coba lagi nanti atau ketik manual.</p>';
+            }
+        }
+
         // --- INIT ---
         renderExercises();
         if (sessionSeconds > 0) updateGlobalTimer();
         if (!localStorage.getItem('sano_pro_tut')) setTimeout(openTutorial, 1000);
     </script>
 </body>
-</html>
+</html>]
