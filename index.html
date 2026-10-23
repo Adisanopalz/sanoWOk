@@ -3,400 +3,670 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SanoWorkOut - Rep Counter</title>
+    <title>SanoWorkOut - Premium</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Menggunakan Tone.js untuk efek suara tanpa file eksternal -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     <style>
-        /* Mencegah double-tap zoom pada mobile agar tombol bisa ditekan cepat */
-        .touch-manipulation {
-            touch-action: manipulation;
-        }
-        /* Mencegah seleksi teks saat menekan tombol berulang-ulang */
-        .no-select {
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            user-select: none;
-        }
-        
-        /* Animasi Pop untuk angka saat diupdate */
-        @keyframes pop {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.2); color: #10b981; }
-            100% { transform: scale(1); }
-        }
-        .animate-pop {
-            animation: pop 0.3s ease-out;
-        }
-
-        /* Animasi Selebrasi saat Set selesai */
-        @keyframes celebrate {
-            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-            50% { transform: scale(1.03); box-shadow: 0 0 25px 10px rgba(16, 185, 129, 0); }
-            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-        }
-        .animate-celebrate {
-            animation: celebrate 0.5s ease-out;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&display=swap');
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Outfit', sans-serif;
             -webkit-tap-highlight-color: transparent;
+            background-color: #0f172a;
         }
-        
-        /* Scrollbar tersembunyi tapi tetap bisa scroll */
-        ::-webkit-scrollbar {
-            width: 0px;
-            background: transparent;
+
+        .touch-manipulation { touch-action: manipulation; }
+        .no-select { user-select: none; }
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+
+        /* Background Mesh Animasi */
+        .bg-mesh {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: radial-gradient(circle at 15% 50%, rgba(16, 185, 129, 0.15), transparent 25%),
+                        radial-gradient(circle at 85% 30%, rgba(20, 184, 166, 0.15), transparent 25%);
+            z-index: -1;
+            animation: breathe 10s ease-in-out infinite alternate;
         }
+
+        @keyframes breathe {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.1); }
+        }
+
+        /* Neo-Glass Card */
+        .neo-glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 10px 40px -10px rgba(0,0,0,0.5);
+        }
+
+        .neo-glass-done {
+            background: linear-gradient(145deg, rgba(16, 185, 129, 0.15), rgba(30, 41, 59, 0.8));
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
+        }
+
+        /* Animasi Text Pop */
+        @keyframes popOut {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.3); color: #34d399; }
+            100% { transform: scale(1); }
+        }
+        .pop-anim { animation: popOut 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+
+        /* Progress Bar Animasi */
+        .progress-bar-fill {
+            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Slide Up Modal / Bottom Sheet */
+        .slide-up {
+            transform: translateY(100%);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .slide-up.active { transform: translateY(0); }
+
+        /* Tombol Utama Glow */
+        .btn-glow {
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+            transition: all 0.2s;
+        }
+        .btn-glow:active { box-shadow: 0 0 5px rgba(16, 185, 129, 0.8); transform: scale(0.95); }
+
+        /* Blink Animasi untuk Rest Timer */
+        @keyframes blink { 50% { opacity: 0.5; } }
+        .animate-blink { animation: blink 1s infinite; }
     </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen pb-24 relative overflow-x-hidden">
+<body class="text-white min-h-screen pb-32 relative overflow-x-hidden">
+    
+    <div class="bg-mesh"></div>
 
-    <!-- Header -->
-    <header class="bg-gray-800 p-5 sticky top-0 shadow-lg z-20 flex justify-between items-center">
-        <div class="flex items-center gap-3">
-            <div class="bg-emerald-500 text-gray-900 p-2 rounded-xl">
-                <i class="fas fa-dumbbell text-xl"></i>
+    <!-- Top Navigation & Global Stats -->
+    <header class="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-xl border-b border-white/5 pt-4 pb-2 px-5 shadow-lg">
+        <div class="flex justify-between items-center mb-3">
+            <div class="flex items-center gap-3">
+                <div class="bg-gradient-to-br from-emerald-400 to-teal-600 text-white p-2 rounded-xl shadow-lg shadow-emerald-500/20">
+                    <i class="fas fa-bolt text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-wide leading-none">Sano<span class="text-emerald-400">WorkOut</span></h1>
+                    <div id="globalTimerDisplay" class="text-xs font-semibold text-gray-400 mt-1 flex items-center gap-1">
+                        <i class="far fa-clock"></i> 00:00:00
+                    </div>
+                </div>
             </div>
-            <h1 class="text-2xl font-bold tracking-wide">Sano<span class="text-emerald-400">WorkOut</span></h1>
+            <button onclick="reqResetAll()" class="w-10 h-10 rounded-full bg-slate-800 text-gray-400 flex items-center justify-center hover:text-white active:scale-90 transition-all shadow-inner">
+                <i class="fas fa-rotate-right"></i>
+            </button>
         </div>
-        <button id="resetAllBtn" class="text-gray-400 hover:text-red-400 p-2 active:scale-95 transition-transform" title="Reset Semua Reps">
-            <i class="fas fa-rotate-right text-xl"></i>
-        </button>
+        
+        <!-- Overall Progress -->
+        <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-2 flex items-center">
+            <div id="overallProgressBar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-300 progress-bar-fill w-0 relative">
+                <div class="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite]"></div>
+            </div>
+        </div>
+        <div class="flex justify-between mt-1 px-1">
+            <span class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Progress Sesi</span>
+            <span id="overallProgressText" class="text-[10px] text-emerald-400 font-bold">0%</span>
+        </div>
     </header>
 
-    <!-- Main Content Container -->
+    <!-- Main Content -->
     <main class="p-4" id="exerciseContainer">
-        <!-- Kartu gerakan akan di-render di sini oleh JavaScript -->
+        <!-- Kartu di-render di sini -->
     </main>
 
-    <!-- State Kosong (Ditampilkan jika tidak ada gerakan) -->
-    <div id="emptyState" class="hidden flex-col items-center justify-center mt-20 text-gray-500 px-6 text-center">
-        <i class="fas fa-clipboard-list text-6xl mb-4 text-gray-700"></i>
-        <p class="text-lg mb-2 text-gray-300 font-semibold">Belum Ada Gerakan</p>
-        <p class="text-sm">Mulai tambahkan custom gerakan Anda dengan menekan tombol + di bawah.</p>
+    <!-- State Kosong -->
+    <div id="emptyState" class="hidden flex-col items-center justify-center mt-24 text-center px-8">
+        <div class="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center mb-6 shadow-inner">
+            <i class="fas fa-dumbbell text-4xl text-slate-600"></i>
+        </div>
+        <h2 class="text-2xl font-black text-white mb-2">Mulai Perjalananmu</h2>
+        <p class="text-slate-400 text-sm mb-8">Tambahkan gerakan pertamamu dan capai target ototmu hari ini.</p>
+        <button onclick="openModal()" class="btn-glow bg-emerald-500 text-slate-900 font-black px-8 py-4 rounded-2xl flex items-center gap-3">
+            <i class="fas fa-plus"></i> Tambah Gerakan
+        </button>
     </div>
 
-    <!-- Floating Action Button (FAB) untuk tambah gerakan -->
-    <button id="addExerciseFab" class="fixed bottom-6 right-6 bg-emerald-500 text-white w-16 h-16 rounded-full shadow-xl shadow-emerald-500/30 flex items-center justify-center text-2xl active:scale-90 transition-transform z-30 touch-manipulation hover:bg-emerald-400">
+    <!-- Rest Timer Overlay (Bottom Sheet) -->
+    <div id="restTimerSheet" class="fixed bottom-0 left-0 w-full neo-glass rounded-t-[2rem] p-6 z-40 slide-up border-t border-emerald-500/30 flex flex-col items-center shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+        <h3 class="text-emerald-400 font-bold uppercase tracking-widest text-xs mb-2">Waktu Istirahat</h3>
+        <div id="restTimeDisplay" class="text-6xl font-black text-white tabular-nums tracking-tighter mb-4 drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]">
+            01:00
+        </div>
+        <div class="flex gap-4 w-full">
+            <button onclick="addRestTime(30)" class="flex-1 bg-slate-800 text-slate-300 py-3 rounded-xl font-bold text-sm active:scale-95 transition-all shadow-inner">+30d</button>
+            <button onclick="skipRest()" class="flex-2 bg-emerald-500 text-slate-900 py-3 px-8 rounded-xl font-black text-sm active:scale-95 transition-all btn-glow w-full">Lewati Istirahat</button>
+        </div>
+    </div>
+
+    <!-- Floating Action Button -->
+    <button id="addExerciseFab" onclick="openModal()" class="fixed bottom-6 right-6 bg-gradient-to-br from-emerald-400 to-teal-500 text-slate-900 w-14 h-14 rounded-full flex items-center justify-center text-xl shadow-[0_0_20px_rgba(16,185,129,0.5)] active:scale-90 transition-all z-30 touch-manipulation">
         <i class="fas fa-plus"></i>
     </button>
 
+    <!-- Custom Modal Confirm -->
+    <div id="confirmModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[60] hidden flex-col items-center justify-center px-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-slate-800 rounded-[2rem] w-full max-w-sm p-6 shadow-2xl text-center transform scale-95 transition-transform duration-300 border border-slate-700" id="confirmContent">
+            <div class="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-exclamation-triangle text-2xl"></i>
+            </div>
+            <h3 id="confirmTitle" class="text-xl font-black mb-2">Konfirmasi</h3>
+            <p id="confirmText" class="text-slate-400 text-sm mb-6">Apakah Anda yakin?</p>
+            <div class="flex gap-3">
+                <button onclick="closeConfirm()" class="flex-1 bg-slate-700 text-white py-4 rounded-xl font-bold active:scale-95 transition-all">Batal</button>
+                <button id="confirmYesBtn" class="flex-1 bg-red-500 text-white py-4 rounded-xl font-bold active:scale-95 transition-all shadow-[0_0_15px_rgba(239,68,68,0.4)]">Ya, Hapus</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Tambah Gerakan -->
-    <div id="addModal" class="fixed inset-0 bg-black/70 z-50 hidden flex-col items-center justify-center px-4 backdrop-blur-sm transition-opacity duration-300 opacity-0">
-        <div class="bg-gray-800 rounded-3xl w-full max-w-sm p-6 shadow-2xl transform scale-95 transition-transform duration-300" id="modalContent">
-            <div class="flex justify-between items-center mb-5">
-                <h2 class="text-xl font-bold">Tambah Gerakan Baru</h2>
-                <button id="closeModalBtn" class="text-gray-400 hover:text-white p-2">
-                    <i class="fas fa-times text-xl"></i>
+    <div id="addModal" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[50] hidden flex-col items-center justify-end sm:justify-center transition-opacity duration-300 opacity-0">
+        <div class="bg-slate-800 rounded-t-[2rem] sm:rounded-[2rem] w-full max-w-md p-6 sm:p-8 shadow-2xl transform translate-y-full sm:translate-y-0 sm:scale-95 transition-all duration-300 border-t sm:border border-slate-700" id="modalContent">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-black">Gerakan Baru</h2>
+                <button onclick="closeModal()" class="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center text-gray-400 hover:text-white active:scale-90">
+                    <i class="fas fa-times"></i>
                 </button>
             </div>
             
-            <label class="block text-gray-400 text-sm mb-2 ml-1">Nama Gerakan</label>
-            <input type="text" id="exerciseNameInput" placeholder="Contoh: Push Up, Sit Up" class="w-full bg-gray-900 border border-gray-700 text-white rounded-2xl px-4 py-4 mb-5 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-lg transition-all shadow-inner">
-            
-            <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="space-y-5">
                 <div>
-                    <label class="block text-gray-400 text-sm mb-2 ml-1">Target Reps</label>
-                    <input type="number" id="targetRepsInput" value="10" min="1" class="w-full bg-gray-900 border border-gray-700 text-white rounded-2xl px-4 py-3 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-2xl text-center font-black transition-all shadow-inner">
+                    <label class="block text-slate-400 text-xs font-bold uppercase tracking-wider mb-2 ml-1">Nama Latihan</label>
+                    <input type="text" id="exName" placeholder="Contoh: Pull Up" class="w-full bg-slate-900 border border-slate-700 text-white rounded-2xl px-5 py-4 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-lg shadow-inner placeholder-slate-600 transition-all">
                 </div>
-                <div>
-                    <label class="block text-gray-400 text-sm mb-2 ml-1">Total Set</label>
-                    <input type="number" id="targetSetsInput" value="3" min="1" class="w-full bg-gray-900 border border-gray-700 text-white rounded-2xl px-4 py-3 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-2xl text-center font-black transition-all shadow-inner">
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-slate-400 text-xs font-bold uppercase tracking-wider mb-2 ml-1">Reps per Set</label>
+                        <input type="number" id="exReps" value="10" min="1" class="w-full bg-slate-900 border border-slate-700 text-white rounded-2xl px-5 py-4 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-2xl font-black text-center shadow-inner transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-slate-400 text-xs font-bold uppercase tracking-wider mb-2 ml-1">Total Sets</label>
+                        <input type="number" id="exSets" value="3" min="1" class="w-full bg-slate-900 border border-slate-700 text-white rounded-2xl px-5 py-4 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-2xl font-black text-center shadow-inner transition-all">
+                    </div>
                 </div>
             </div>
             
-            <button id="saveExerciseBtn" class="w-full bg-emerald-500 text-gray-900 font-black rounded-2xl py-4 text-lg active:scale-95 transition-transform shadow-lg shadow-emerald-500/20">
-                Simpan Gerakan
+            <button onclick="saveNewExercise()" class="w-full mt-8 bg-emerald-500 text-slate-900 font-black rounded-2xl py-4 text-lg active:scale-95 transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+                Simpan & Mulai
+            </button>
+        </div>
+    </div>
+
+    <!-- Workout Summary Overlay -->
+    <div id="summaryOverlay" class="fixed inset-0 bg-slate-900 z-[70] hidden flex-col items-center justify-center p-6 opacity-0 transition-opacity duration-1000">
+        <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20"></div>
+        <div class="relative z-10 text-center flex flex-col items-center">
+            <div class="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center mb-6 shadow-[0_0_50px_rgba(16,185,129,0.6)] animate-bounce">
+                <i class="fas fa-trophy text-5xl text-slate-900"></i>
+            </div>
+            <h1 class="text-4xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-200">WORKOUT SELESAI!</h1>
+            <p class="text-slate-400 mb-8">Kerja bagus! Anda telah menyelesaikan semua target hari ini.</p>
+            
+            <div class="grid grid-cols-2 gap-4 w-full max-w-xs mb-8">
+                <div class="neo-glass p-4 rounded-2xl">
+                    <p class="text-xs text-slate-400 uppercase font-bold mb-1">Total Waktu</p>
+                    <p id="summaryTime" class="text-xl font-black text-emerald-400">00:00</p>
+                </div>
+                <div class="neo-glass p-4 rounded-2xl">
+                    <p class="text-xs text-slate-400 uppercase font-bold mb-1">Total Set</p>
+                    <p id="summarySets" class="text-xl font-black text-emerald-400">0</p>
+                </div>
+            </div>
+            
+            <button onclick="closeSummary()" class="bg-white text-slate-900 px-10 py-4 rounded-full font-black tracking-wide shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-95 transition-all">
+                TUTUP
             </button>
         </div>
     </div>
 
     <script>
-        // State Management
-        let rawData = JSON.parse(localStorage.getItem('sano_exercises')) || [];
+        // --- AUDIO SYSTEM (Tone.js) ---
+        let audioInitialized = false;
+        let synth;
         
-        // Auto-Migrasi data lama ke struktur baru (mendukung set & reps)
-        let exercises = rawData.map(ex => {
-            if (ex.targetReps === undefined) {
-                return {
-                    id: ex.id,
-                    name: ex.name,
-                    currentRep: ex.reps || 0,
-                    targetReps: 10,
-                    currentSet: 1,
-                    targetSets: 3
-                };
-            }
-            return ex;
-        });
-
-        if (exercises.length === 0) {
-            exercises = [
-                { id: 1, name: 'Push Up', currentRep: 0, targetReps: 12, currentSet: 1, targetSets: 3 },
-                { id: 2, name: 'Sit Up', currentRep: 0, targetReps: 15, currentSet: 1, targetSets: 3 }
-            ];
+        function initAudio() {
+            if(audioInitialized) return;
+            Tone.start();
+            // Synthesizer futuristik
+            synth = new Tone.PolySynth(Tone.FMSynth).toDestination();
+            synth.set({
+                harmonicity: 3,
+                modulationIndex: 10,
+                oscillator: { type: "sine" },
+                modulation: { type: "square" },
+                envelope: { attack: 0.01, decay: 0.1, sustain: 0.1, release: 0.5 }
+            });
+            audioInitialized = true;
         }
 
-        // DOM Elements
-        const container = document.getElementById('exerciseContainer');
-        const emptyState = document.getElementById('emptyState');
-        const addModal = document.getElementById('addModal');
-        const modalContent = document.getElementById('modalContent');
-        const addExerciseFab = document.getElementById('addExerciseFab');
-        const closeModalBtn = document.getElementById('closeModalBtn');
-        const saveExerciseBtn = document.getElementById('saveExerciseBtn');
-        const exerciseNameInput = document.getElementById('exerciseNameInput');
-        const targetRepsInput = document.getElementById('targetRepsInput');
-        const targetSetsInput = document.getElementById('targetSetsInput');
-        const resetAllBtn = document.getElementById('resetAllBtn');
-
-        function triggerVibration(duration = 50) {
-            if ("vibrate" in navigator) {
-                navigator.vibrate(duration);
+        function playSound(type) {
+            if(!audioInitialized || !synth) return;
+            const now = Tone.now();
+            if(type === 'rep') {
+                synth.triggerAttackRelease("C5", "32n", now);
+            } else if (type === 'set') {
+                synth.triggerAttackRelease(["E5", "G5", "C6"], "8n", now);
+            } else if (type === 'finish') {
+                synth.triggerAttackRelease(["C5", "E5", "G5", "C6"], "4n", now);
+                setTimeout(() => synth.triggerAttackRelease(["C5", "E5", "G5", "E6"], "2n", Tone.now()), 300);
+            } else if (type === 'timerEnd') {
+                synth.triggerAttackRelease("C6", "16n", now);
+                synth.triggerAttackRelease("C6", "16n", now + 0.2);
+                synth.triggerAttackRelease("C6", "8n", now + 0.4);
             }
         }
 
+        // Inisialisasi audio pada tap pertama di mana saja
+        document.body.addEventListener('pointerdown', initAudio, {once:true});
+
+        // --- HAPTIC FEEDBACK ---
+        function vibe(pattern) {
+            if ("vibrate" in navigator) navigator.vibrate(pattern);
+        }
+
+        // --- STATE MANAGEMENT ---
+        let exercises = JSON.parse(localStorage.getItem('sano_pro_exercises')) || [];
+        
+        // Timer Sesi
+        let sessionSeconds = parseInt(localStorage.getItem('sano_pro_time')) || 0;
+        let sessionTimer = null;
+        let isSessionActive = false;
+
+        // Rest Timer
+        let restSeconds = 0;
+        let restInterval = null;
+
+        // --- CORE LOGIC ---
+        function startSession() {
+            if(!isSessionActive && exercises.length > 0) {
+                isSessionActive = true;
+                sessionTimer = setInterval(() => {
+                    sessionSeconds++;
+                    updateGlobalTimer();
+                    localStorage.setItem('sano_pro_time', sessionSeconds);
+                }, 1000);
+            }
+        }
+
+        function formatTime(totalSeconds) {
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            const s = totalSeconds % 60;
+            if(h > 0) return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+            return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        }
+
+        function updateGlobalTimer() {
+            document.getElementById('globalTimerDisplay').innerHTML = `<i class="far fa-clock"></i> ${formatTime(sessionSeconds)}`;
+        }
+
+        function calculateProgress() {
+            if(exercises.length === 0) return 0;
+            let totalTargetSets = 0;
+            let totalDoneSets = 0;
+
+            exercises.forEach(ex => {
+                totalTargetSets += ex.targetSets;
+                // Jika sedang di set 2, berarti set 1 sudah selesai. Kecuali jika sudah max
+                const isMax = ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps;
+                let completed = ex.currentSet - 1;
+                if (isMax) completed = ex.targetSets;
+                totalDoneSets += completed;
+            });
+
+            return (totalDoneSets / totalTargetSets) * 100;
+        }
+
+        function updateProgressUI() {
+            const progress = calculateProgress();
+            document.getElementById('overallProgressBar').style.width = `${progress}%`;
+            document.getElementById('overallProgressText').innerText = `${Math.round(progress)}%`;
+
+            // Cek apakah workout selesai semua
+            if(progress === 100 && exercises.length > 0) {
+                setTimeout(showSummary, 1000);
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('sano_pro_exercises', JSON.stringify(exercises));
+            updateProgressUI();
+        }
+
+        // --- UI RENDERING ---
         function renderExercises() {
+            const container = document.getElementById('exerciseContainer');
+            const emptyState = document.getElementById('emptyState');
+            const fab = document.getElementById('addExerciseFab');
+            
             container.innerHTML = '';
             
             if (exercises.length === 0) {
                 emptyState.classList.remove('hidden');
                 emptyState.classList.add('flex');
+                fab.classList.add('hidden'); // Sembunyikan FAB jika layar kosong sudah ada tombol besar
             } else {
                 emptyState.classList.add('hidden');
                 emptyState.classList.remove('flex');
+                fab.classList.remove('hidden');
                 
                 exercises.forEach(ex => {
                     const isDone = ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps;
-                    const progressPercentage = (ex.currentRep / ex.targetReps) * 100;
-
+                    const repPercent = (ex.currentRep / ex.targetReps) * 100;
+                    
                     const card = document.createElement('div');
+                    card.className = `neo-glass rounded-[2rem] p-5 mb-5 relative overflow-hidden transition-all duration-500 ${isDone ? 'neo-glass-done' : ''}`;
                     card.id = `card-${ex.id}`;
-                    // Kartu dibuat lebih rounded dan punya state warna khusus jika selesai
-                    card.className = `bg-gray-800 rounded-[2.5rem] p-6 mb-6 shadow-xl border border-gray-700/50 flex flex-col gap-3 relative overflow-hidden transition-all duration-500 ${isDone ? 'ring-2 ring-emerald-500/50 bg-gradient-to-br from-gray-800 to-emerald-900/30' : ''}`;
                     
                     card.innerHTML = `
-                        <!-- Header Card -->
-                        <div class="flex justify-between items-start">
+                        <div class="flex justify-between items-start mb-3 relative z-10">
                             <div>
-                                <h3 class="text-2xl font-black text-gray-100 uppercase tracking-tight">${ex.name}</h3>
-                                <div id="set-display-${ex.id}" class="inline-block mt-1 text-xs font-bold ${isDone ? 'bg-emerald-500 text-gray-900' : 'bg-gray-700 text-emerald-400'} px-3 py-1 rounded-full uppercase tracking-wider transition-colors duration-300">
-                                    ${isDone ? 'COMPLETED' : `SET ${ex.currentSet} / ${ex.targetSets}`}
+                                <h3 class="text-xl font-black text-white uppercase tracking-tight">${ex.name}</h3>
+                                <div class="inline-flex items-center gap-2 mt-1">
+                                    <span id="badge-${ex.id}" class="${isDone ? 'bg-emerald-500 text-slate-900' : 'bg-slate-800 text-emerald-400 border border-slate-700'} text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest transition-colors">
+                                        ${isDone ? '<i class="fas fa-check mr-1"></i> DONE' : `SET ${ex.currentSet} / ${ex.targetSets}`}
+                                    </span>
                                 </div>
                             </div>
-                            <button onclick="deleteExercise(${ex.id})" class="text-gray-500 hover:text-red-400 p-2 bg-gray-900/50 rounded-full active:scale-90 transition-transform">
-                                <i class="fas fa-trash"></i>
+                            <button onclick="reqDelete(${ex.id})" class="w-10 h-10 bg-slate-800/50 rounded-full flex items-center justify-center text-slate-500 hover:text-red-400 active:scale-90 transition-all">
+                                <i class="fas fa-ellipsis-v"></i>
                             </button>
                         </div>
                         
-                        <!-- Rep Counter & Progress Bar -->
-                        <div class="py-3">
-                            <div class="flex items-baseline gap-2 mb-4">
-                                <span id="rep-display-${ex.id}" class="text-7xl font-black text-white tabular-nums tracking-tighter">${ex.currentRep}</span>
-                                <span class="text-2xl font-bold text-gray-500">/ ${ex.targetReps}</span>
-                                <span class="text-base font-medium text-gray-400 ml-1">reps</span>
+                        <div class="flex items-end gap-3 py-2 relative z-10">
+                            <span id="rep-${ex.id}" class="text-7xl font-black tabular-nums leading-none tracking-tighter ${isDone ? 'text-emerald-400' : 'text-white'}">${ex.currentRep}</span>
+                            <div class="pb-1 text-slate-500 font-bold">
+                                <span class="text-2xl">/ ${ex.targetReps}</span>
+                                <span class="text-xs uppercase tracking-widest ml-1">reps</span>
                             </div>
-                            
-                            <!-- Progress Bar Kekinian -->
-                            <div class="w-full bg-gray-900 h-5 rounded-full p-1 overflow-hidden shadow-inner">
-                                <div id="progress-bar-${ex.id}" class="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-500 ease-out relative" style="width: ${isDone ? 100 : progressPercentage}%">
-                                    <div class="absolute top-0 left-0 right-0 h-1/2 bg-white/20 rounded-full"></div>
-                                </div>
-                            </div>
+                        </div>
+                        
+                        <!-- Mini Progress Line -->
+                        <div class="w-full h-1.5 bg-slate-800 rounded-full mt-2 mb-5 overflow-hidden">
+                            <div id="bar-${ex.id}" class="h-full bg-emerald-400 progress-bar-fill" style="width: ${isDone ? 100 : repPercent}%"></div>
                         </div>
                         
                         <!-- Controls -->
-                        <div class="flex gap-3 mt-1">
-                            <button onclick="decrement(${ex.id})" class="bg-gray-700/50 active:bg-gray-600 hover:bg-gray-600 rounded-[1.5rem] w-[4.5rem] flex items-center justify-center text-2xl text-gray-400 touch-manipulation no-select active:scale-95 transition-all">
+                        <div class="grid grid-cols-4 gap-2 relative z-10">
+                            <button onclick="modifyRep(${ex.id}, -1)" class="col-span-1 bg-slate-800 active:bg-slate-700 text-slate-400 rounded-2xl h-14 flex items-center justify-center text-xl touch-manipulation no-select active:scale-95 transition-transform">
                                 <i class="fas fa-minus"></i>
                             </button>
-                            <button onclick="increment(${ex.id})" id="btn-inc-${ex.id}" class="flex-1 ${isDone ? 'bg-gray-700 text-gray-500' : 'bg-emerald-500 text-gray-900 shadow-lg shadow-emerald-500/20 active:bg-emerald-400 hover:bg-emerald-400'} rounded-[1.5rem] py-4 flex flex-col items-center justify-center font-black touch-manipulation no-select active:scale-[0.96] transition-all" ${isDone ? 'disabled' : ''}>
-                                <i class="fas fa-plus text-3xl mb-1"></i>
-                                <span class="text-[10px] uppercase tracking-widest opacity-80">Tap</span>
+                            <button onclick="modifyRep(${ex.id}, 5)" class="col-span-1 bg-emerald-900/20 border border-emerald-500/20 text-emerald-400 active:bg-emerald-800/40 rounded-2xl h-14 flex items-center justify-center font-bold text-lg touch-manipulation no-select active:scale-95 transition-transform" ${isDone ? 'disabled opacity-50' : ''}>
+                                +5
+                            </button>
+                            <button onclick="forceFinishSet(${ex.id})" class="col-span-1 bg-emerald-900/20 border border-emerald-500/20 text-emerald-400 active:bg-emerald-800/40 rounded-2xl h-14 flex items-center justify-center font-bold text-xs uppercase tracking-widest touch-manipulation no-select active:scale-95 transition-transform" ${isDone ? 'disabled opacity-50' : ''}>
+                                Max
+                            </button>
+                            <button onclick="modifyRep(${ex.id}, 1)" id="btnMain-${ex.id}" class="col-span-1 ${isDone ? 'bg-slate-800 text-slate-600' : 'bg-emerald-500 text-slate-900 btn-glow shadow-[0_0_15px_rgba(16,185,129,0.3)]'} rounded-2xl h-14 flex items-center justify-center text-2xl touch-manipulation no-select transition-all" ${isDone ? 'disabled' : ''}>
+                                <i class="fas fa-plus"></i>
                             </button>
                         </div>
+                        
+                        <!-- Progress Background overlay -->
+                        <div class="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-300 transition-all duration-500" style="width: ${isDone ? 100 : repPercent}%; opacity: 0.3;"></div>
                     `;
                     container.appendChild(card);
                 });
             }
+            updateGlobalTimer();
+            updateProgressUI();
         }
 
-        window.increment = function(id) {
-            const index = exercises.findIndex(ex => ex.id === id);
-            if (index !== -1) {
-                let ex = exercises[index];
-                
-                // Cegah penambahan jika sudah selesai semuanya
-                if (ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps) return;
+        // --- ACTIONS ---
+        window.modifyRep = function(id, amount) {
+            initAudio();
+            startSession();
+            
+            const ex = exercises.find(e => e.id === id);
+            if(!ex) return;
+            
+            const isDone = ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps;
+            if (amount > 0 && isDone) return;
 
-                ex.currentRep += 1;
-                
-                // Cek apakah mencapai target reps untuk set ini
-                if (ex.currentRep >= ex.targetReps) {
-                    if (ex.currentSet < ex.targetSets) {
-                        // Lanjut ke set berikutnya
-                        ex.currentSet += 1;
-                        ex.currentRep = 0; 
-                        triggerVibration([30, 50, 30]); // Getaran beda untuk ganti set
-                        
-                        // Mainkan animasi selebrasi di kartu
-                        const card = document.getElementById(`card-${id}`);
-                        if(card) {
-                            card.classList.remove('animate-celebrate');
-                            void card.offsetWidth;
-                            card.classList.add('animate-celebrate');
-                        }
-                    } else {
-                        // Selesai seluruh Set & Reps!
-                        ex.currentRep = ex.targetReps;
-                        triggerVibration([100, 50, 100, 50, 100]); // Getaran panjang
-                    }
+            let newRep = ex.currentRep + amount;
+
+            if (amount > 0) { // Increment
+                if (newRep >= ex.targetReps) {
+                    forceFinishSet(id);
                 } else {
-                    triggerVibration(40);
+                    ex.currentRep = newRep;
+                    vibe(40);
+                    playSound('rep');
+                    updateCardUI(id);
+                    saveData();
                 }
-                
-                saveData();
-                updateDisplay(id, true);
-            }
-        }
-
-        window.decrement = function(id) {
-            const index = exercises.findIndex(ex => ex.id === id);
-            if (index !== -1) {
-                let ex = exercises[index];
-                
+            } else { // Decrement (-1)
                 if (ex.currentRep > 0) {
                     ex.currentRep -= 1;
-                    updateDisplay(id, false);
-                    triggerVibration(20);
+                    vibe(20);
+                    updateCardUI(id);
                     saveData();
                 } else if (ex.currentSet > 1) {
-                    // Mundur ke set sebelumnya jika reps 0 (fitur Undo)
                     ex.currentSet -= 1;
                     ex.currentRep = ex.targetReps - 1;
-                    updateDisplay(id, false);
-                    triggerVibration(20);
+                    vibe(20);
+                    updateCardUI(id);
                     saveData();
                 }
             }
         }
 
-        window.deleteExercise = function(id) {
-            if(confirm('Hapus gerakan ini?')) {
-                exercises = exercises.filter(ex => ex.id !== id);
-                triggerVibration([30, 50, 30]);
-                saveData();
-                renderExercises();
-            }
-        }
-
-        // Update UI Dinamis tanpa harus re-render seluruh daftar
-        function updateDisplay(id, animate = true) {
+        window.forceFinishSet = function(id) {
+            initAudio();
+            startSession();
             const ex = exercises.find(e => e.id === id);
-            if (!ex) return;
+            if(!ex) return;
+            
+            if (ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps) return;
 
-            const repDisplay = document.getElementById(`rep-display-${id}`);
-            const setDisplay = document.getElementById(`set-display-${id}`);
-            const progressBar = document.getElementById(`progress-bar-${id}`);
-            const card = document.getElementById(`card-${id}`);
-            const btnInc = document.getElementById(`btn-inc-${id}`);
+            if (ex.currentSet < ex.targetSets) {
+                ex.currentSet += 1;
+                ex.currentRep = 0;
+                vibe([50, 50, 50]);
+                playSound('set');
+                startRestTimer(60); // Default 60s rest
+            } else {
+                ex.currentRep = ex.targetReps;
+                vibe([100, 50, 100, 50, 100]);
+                playSound('finish');
+            }
+            
+            updateCardUI(id, true);
+            saveData();
+            
+            // Re-render to update disabled states if maxed out
+            if(ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps) {
+                setTimeout(renderExercises, 400);
+            }
+        }
+
+        // Update sebagian UI tanpa render ulang keseluruhan (lebih smooth)
+        function updateCardUI(id, triggerSetAnim = false) {
+            const ex = exercises.find(e => e.id === id);
+            if(!ex) return;
+
             const isDone = ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps;
+            const percent = (ex.currentRep / ex.targetReps) * 100;
 
-            if (repDisplay) {
-                repDisplay.innerText = ex.currentRep;
-                if(animate) {
-                    repDisplay.classList.remove('animate-pop');
-                    void repDisplay.offsetWidth; 
-                    repDisplay.classList.add('animate-pop');
-                }
+            // Update Angka dengan animasi pop
+            const repEl = document.getElementById(`rep-${id}`);
+            if(repEl) {
+                repEl.innerText = ex.currentRep;
+                repEl.classList.remove('pop-anim');
+                void repEl.offsetWidth; // trigger reflow
+                repEl.classList.add('pop-anim');
             }
 
-            if (setDisplay) {
-                if (isDone) {
-                    setDisplay.innerText = 'COMPLETED';
-                    setDisplay.className = 'inline-block mt-1 text-xs font-bold bg-emerald-500 text-gray-900 px-3 py-1 rounded-full uppercase tracking-wider transition-colors duration-300';
+            // Update Bar
+            const barEl = document.getElementById(`bar-${id}`);
+            if(barEl) barEl.style.width = `${isDone ? 100 : percent}%`;
+
+            // Update Badge
+            const badgeEl = document.getElementById(`badge-${id}`);
+            if(badgeEl) {
+                if(isDone) {
+                    badgeEl.innerHTML = '<i class="fas fa-check mr-1"></i> DONE';
+                    badgeEl.className = 'bg-emerald-500 text-slate-900 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest transition-colors';
                 } else {
-                    setDisplay.innerText = `SET ${ex.currentSet} / ${ex.targetSets}`;
-                    setDisplay.className = 'inline-block mt-1 text-xs font-bold bg-gray-700 text-emerald-400 px-3 py-1 rounded-full uppercase tracking-wider transition-colors duration-300';
+                    badgeEl.innerHTML = `SET ${ex.currentSet} / ${ex.targetSets}`;
+                    badgeEl.className = 'bg-slate-800 text-emerald-400 border border-slate-700 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest transition-colors';
                 }
             }
 
-            if (progressBar) {
-                let percentage = (ex.currentRep / ex.targetReps) * 100;
-                progressBar.style.width = `${isDone ? 100 : percentage}%`;
-            }
-
-            if (card) {
-                if (isDone) {
-                    card.classList.add('ring-2', 'ring-emerald-500/50', 'bg-gradient-to-br', 'from-gray-800', 'to-emerald-900/30');
-                } else {
-                    card.classList.remove('ring-2', 'ring-emerald-500/50', 'bg-gradient-to-br', 'from-gray-800', 'to-emerald-900/30');
-                }
-            }
-
-            if (btnInc) {
-                if (isDone) {
-                    btnInc.disabled = true;
-                    btnInc.className = 'flex-1 bg-gray-700 text-gray-500 rounded-[1.5rem] py-4 flex flex-col items-center justify-center font-black transition-all';
-                } else {
-                    btnInc.disabled = false;
-                    btnInc.className = 'flex-1 bg-emerald-500 text-gray-900 shadow-lg shadow-emerald-500/20 active:bg-emerald-400 hover:bg-emerald-400 rounded-[1.5rem] py-4 flex flex-col items-center justify-center font-black touch-manipulation no-select active:scale-[0.96] transition-all';
-                }
+            // Update Card Background jika selesai
+            const cardEl = document.getElementById(`card-${id}`);
+            if(cardEl) {
+                if(isDone) cardEl.classList.add('neo-glass-done');
+                else cardEl.classList.remove('neo-glass-done');
             }
         }
 
-        function saveData() {
-            localStorage.setItem('sano_exercises', JSON.stringify(exercises));
+        // --- REST TIMER SYSTEM ---
+        const restSheet = document.getElementById('restTimerSheet');
+        const restDisplay = document.getElementById('restTimeDisplay');
+
+        function startRestTimer(seconds) {
+            restSeconds = seconds;
+            updateRestUI();
+            restSheet.classList.add('active');
+            
+            clearInterval(restInterval);
+            restInterval = setInterval(() => {
+                restSeconds--;
+                updateRestUI();
+                
+                if(restSeconds <= 0) {
+                    endRest();
+                } else if (restSeconds <= 3) {
+                    vibe(200);
+                }
+            }, 1000);
         }
 
-        resetAllBtn.addEventListener('click', () => {
-            if(exercises.length === 0) return;
-            if(confirm('Reset semua hitungan gerakan ke awal (Set 1, Rep 0)?')) {
-                exercises = exercises.map(ex => ({...ex, currentRep: 0, currentSet: 1}));
+        function updateRestUI() {
+            const m = Math.floor(restSeconds / 60);
+            const s = restSeconds % 60;
+            restDisplay.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+            if(restSeconds <= 10) restDisplay.classList.add('text-red-400', 'animate-blink');
+            else restDisplay.classList.remove('text-red-400', 'animate-blink');
+        }
+
+        window.addRestTime = function(sec) { restSeconds += sec; updateRestUI(); vibe(30); }
+        
+        window.skipRest = function() { endRest(false); vibe(30); }
+
+        function endRest(auto = true) {
+            clearInterval(restInterval);
+            restSheet.classList.remove('active');
+            if(auto) {
+                vibe([300, 100, 300]);
+                playSound('timerEnd');
+            }
+        }
+
+        // --- CUSTOM MODALS ---
+        let confirmAction = null;
+        const confirmModal = document.getElementById('confirmModal');
+
+        window.reqDelete = function(id) {
+            const ex = exercises.find(e => e.id === id);
+            document.getElementById('confirmTitle').innerText = 'Hapus Gerakan?';
+            document.getElementById('confirmText').innerText = `Menghapus "${ex.name}" tidak bisa dibatalkan.`;
+            document.getElementById('confirmYesBtn').innerText = 'Hapus';
+            document.getElementById('confirmYesBtn').className = 'flex-1 bg-red-500 text-white py-4 rounded-xl font-bold active:scale-95 transition-all shadow-[0_0_15px_rgba(239,68,68,0.4)]';
+            
+            confirmAction = () => {
+                exercises = exercises.filter(e => e.id !== id);
                 saveData();
                 renderExercises();
-                triggerVibration(100);
-            }
+            };
+            showConfirm();
+        }
+
+        window.reqResetAll = function() {
+            if(exercises.length === 0) return;
+            document.getElementById('confirmTitle').innerText = 'Reset Semua Sesi?';
+            document.getElementById('confirmText').innerText = 'Semua hitungan rep dan set akan diulang dari nol.';
+            document.getElementById('confirmYesBtn').innerText = 'Reset';
+            document.getElementById('confirmYesBtn').className = 'flex-1 bg-orange-500 text-white py-4 rounded-xl font-bold active:scale-95 transition-all shadow-[0_0_15px_rgba(249,115,22,0.4)]';
+            
+            confirmAction = () => {
+                exercises = exercises.map(ex => ({...ex, currentRep: 0, currentSet: 1}));
+                sessionSeconds = 0;
+                clearInterval(sessionTimer);
+                isSessionActive = false;
+                localStorage.setItem('sano_pro_time', 0);
+                saveData();
+                renderExercises();
+            };
+            showConfirm();
+        }
+
+        function showConfirm() {
+            confirmModal.classList.remove('hidden');
+            confirmModal.classList.add('flex');
+            setTimeout(() => {
+                confirmModal.classList.remove('opacity-0');
+                document.getElementById('confirmContent').classList.remove('scale-95');
+            }, 10);
+        }
+
+        window.closeConfirm = function() {
+            confirmModal.classList.add('opacity-0');
+            document.getElementById('confirmContent').classList.add('scale-95');
+            setTimeout(() => {
+                confirmModal.classList.add('hidden');
+                confirmModal.classList.remove('flex');
+                confirmAction = null;
+            }, 300);
+        }
+
+        document.getElementById('confirmYesBtn').addEventListener('click', () => {
+            if(confirmAction) confirmAction();
+            closeConfirm();
+            vibe(50);
         });
 
-        // Modal Logic
-        function openModal() {
+        // --- ADD EXERCISE MODAL ---
+        const addModal = document.getElementById('addModal');
+        const modalContentAdd = document.getElementById('modalContent');
+        
+        window.openModal = function() {
+            initAudio();
             addModal.classList.remove('hidden');
             addModal.classList.add('flex');
             setTimeout(() => {
                 addModal.classList.remove('opacity-0');
-                modalContent.classList.remove('scale-95');
-                modalContent.classList.add('scale-100');
-                exerciseNameInput.focus();
+                modalContentAdd.classList.remove('translate-y-full', 'sm:scale-95');
+                document.getElementById('exName').focus();
             }, 10);
         }
 
-        function closeModal() {
+        window.closeModal = function() {
             addModal.classList.add('opacity-0');
-            modalContent.classList.remove('scale-100');
-            modalContent.classList.add('scale-95');
-            
+            modalContentAdd.classList.add('translate-y-full', 'sm:scale-95');
             setTimeout(() => {
                 addModal.classList.add('hidden');
                 addModal.classList.remove('flex');
-                exerciseNameInput.value = '';
-                targetRepsInput.value = '10';
-                targetSetsInput.value = '3';
+                document.getElementById('exName').value = '';
+                document.getElementById('exReps').value = '10';
+                document.getElementById('exSets').value = '3';
             }, 300);
         }
 
-        addExerciseFab.addEventListener('click', openModal);
-        closeModalBtn.addEventListener('click', closeModal);
-        addModal.addEventListener('click', (e) => {
-            if (e.target === addModal) closeModal();
-        });
-
-        function addNewExercise() {
-            const name = exerciseNameInput.value.trim();
-            const targetReps = parseInt(targetRepsInput.value) || 10;
-            const targetSets = parseInt(targetSetsInput.value) || 3;
+        window.saveNewExercise = function() {
+            const name = document.getElementById('exName').value.trim();
+            const reps = parseInt(document.getElementById('exReps').value) || 10;
+            const sets = parseInt(document.getElementById('exSets').value) || 3;
 
             if (name) {
                 const newId = exercises.length > 0 ? Math.max(...exercises.map(ex => ex.id)) + 1 : 1;
@@ -404,31 +674,51 @@
                     id: newId,
                     name: name,
                     currentRep: 0,
-                    targetReps: targetReps,
+                    targetReps: reps,
                     currentSet: 1,
-                    targetSets: targetSets
+                    targetSets: sets
                 });
                 saveData();
                 renderExercises();
                 closeModal();
-                triggerVibration(50);
-                
-                setTimeout(() => {
-                    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-                }, 300);
+                vibe(50);
+                setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 300);
             } else {
-                exerciseNameInput.focus();
-                exerciseNameInput.classList.add('border-red-500', 'ring-red-500');
-                setTimeout(() => {
-                    exerciseNameInput.classList.remove('border-red-500', 'ring-red-500');
-                }, 1000);
+                const input = document.getElementById('exName');
+                input.classList.add('border-red-500', 'ring-red-500');
+                vibe([30,30]);
+                setTimeout(() => input.classList.remove('border-red-500', 'ring-red-500'), 1000);
             }
         }
 
-        saveExerciseBtn.addEventListener('click', addNewExercise);
+        // --- WORKOUT SUMMARY ---
+        const summaryOverlay = document.getElementById('summaryOverlay');
         
-        // Inisialisasi Pertama
+        function showSummary() {
+            playSound('finish');
+            clearInterval(sessionTimer);
+            isSessionActive = false;
+            
+            let totalSets = exercises.reduce((sum, ex) => sum + ex.targetSets, 0);
+            document.getElementById('summaryTime').innerText = formatTime(sessionSeconds);
+            document.getElementById('summarySets').innerText = totalSets;
+            
+            summaryOverlay.classList.remove('hidden');
+            summaryOverlay.classList.add('flex');
+            setTimeout(() => { summaryOverlay.classList.remove('opacity-0'); }, 50);
+        }
+
+        window.closeSummary = function() {
+            summaryOverlay.classList.add('opacity-0');
+            setTimeout(() => {
+                summaryOverlay.classList.add('hidden');
+                summaryOverlay.classList.remove('flex');
+            }, 1000);
+        }
+
+        // --- INIT ---
         renderExercises();
+        if (sessionSeconds > 0) updateGlobalTimer();
 
     </script>
 </body>
