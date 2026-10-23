@@ -6,8 +6,10 @@
     <title>SanoWorkOut - Premium</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <!-- Menggunakan Tone.js untuk efek suara tanpa file eksternal -->
+    <!-- Menggunakan Tone.js untuk efek suara -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Confetti untuk selebrasi rank up -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&display=swap');
 
@@ -59,10 +61,24 @@
         }
         .pop-anim { animation: popOut 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
 
-        /* Progress Bar Animasi */
-        .progress-bar-fill {
-            transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        /* Rank Sigma Gradient */
+        .text-sigma {
+            background: linear-gradient(to right, #fbbf24, #f59e0b, #ef4444, #ec4899, #8b5cf6, #3b82f6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            background-size: 300% 300%;
+            animation: gradient-shift 3s ease infinite;
         }
+        
+        @keyframes gradient-shift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Progress Bar Animasi */
+        .progress-bar-fill { transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
 
         /* Slide Up Modal / Bottom Sheet */
         .slide-up {
@@ -81,6 +97,13 @@
         /* Blink Animasi untuk Rest Timer */
         @keyframes blink { 50% { opacity: 0.5; } }
         .animate-blink { animation: blink 1s infinite; }
+
+        /* Massive tap area untuk focus mode */
+        .tap-area {
+            position: absolute; inset: 0; z-index: 10;
+            display: flex; flex-direction: column; justify-content: center; items-center;
+            cursor: pointer; -webkit-tap-highlight-color: transparent;
+        }
     </style>
 </head>
 <body class="text-white min-h-screen pb-32 relative overflow-x-hidden">
@@ -88,33 +111,49 @@
     <div class="bg-mesh"></div>
 
     <!-- Top Navigation & Global Stats -->
-    <header class="sticky top-0 z-30 bg-slate-900/80 backdrop-blur-xl border-b border-white/5 pt-4 pb-2 px-5 shadow-lg">
-        <div class="flex justify-between items-center mb-3">
+    <header class="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-xl border-b border-white/5 pt-4 pb-3 px-5 shadow-lg">
+        <div class="flex justify-between items-center mb-4">
             <div class="flex items-center gap-3">
-                <div class="bg-gradient-to-br from-emerald-400 to-teal-600 text-white p-2 rounded-xl shadow-lg shadow-emerald-500/20">
-                    <i class="fas fa-bolt text-xl"></i>
+                <div id="rankIcon" class="bg-slate-800 text-slate-400 p-2.5 rounded-xl shadow-inner text-xl w-11 h-11 flex items-center justify-center transition-all duration-500">
+                    <i class="fas fa-egg"></i>
                 </div>
                 <div>
-                    <h1 class="text-xl font-black tracking-wide leading-none">Sano<span class="text-emerald-400">WorkOut</span></h1>
-                    <div id="globalTimerDisplay" class="text-xs font-semibold text-gray-400 mt-1 flex items-center gap-1">
-                        <i class="far fa-clock"></i> 00:00:00
+                    <h1 class="text-lg font-black tracking-wide leading-none flex items-center gap-1">
+                        Rank: <span id="rankTitle" class="text-slate-400">Pemula</span>
+                    </h1>
+                    <div class="text-xs font-semibold text-gray-400 mt-1 flex items-center gap-2">
+                        <span id="xpText">0 XP</span>
+                        <span class="text-slate-600">•</span>
+                        <div id="globalTimerDisplay" class="flex items-center gap-1"><i class="far fa-clock"></i> 00:00:00</div>
                     </div>
                 </div>
             </div>
-            <button onclick="reqResetAll()" class="w-10 h-10 rounded-full bg-slate-800 text-gray-400 flex items-center justify-center hover:text-white active:scale-90 transition-all shadow-inner">
-                <i class="fas fa-rotate-right"></i>
-            </button>
+            <div class="flex gap-2">
+                <button onclick="openTutorial()" class="w-10 h-10 rounded-full bg-slate-800/80 text-emerald-400 flex items-center justify-center hover:text-white active:scale-90 transition-all shadow-inner">
+                    <i class="fas fa-question"></i>
+                </button>
+                <button onclick="reqResetAll()" class="w-10 h-10 rounded-full bg-slate-800/80 text-gray-400 flex items-center justify-center hover:text-red-400 active:scale-90 transition-all shadow-inner">
+                    <i class="fas fa-rotate-right"></i>
+                </button>
+            </div>
         </div>
         
-        <!-- Overall Progress -->
-        <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-2 flex items-center">
+        <!-- XP Progress Bar (Gamification) -->
+        <div class="mb-3">
+            <div class="flex justify-between text-[9px] uppercase font-bold tracking-wider mb-1 px-1">
+                <span class="text-slate-500">Progress Rank</span>
+                <span id="xpToNextText" class="text-emerald-400">0 to next rank</span>
+            </div>
+            <div class="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                <div id="xpProgressBar" class="h-full bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 progress-bar-fill w-0"></div>
+            </div>
+        </div>
+
+        <!-- Overall Workout Progress -->
+        <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden flex items-center">
             <div id="overallProgressBar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-300 progress-bar-fill w-0 relative">
                 <div class="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite]"></div>
             </div>
-        </div>
-        <div class="flex justify-between mt-1 px-1">
-            <span class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Progress Sesi</span>
-            <span id="overallProgressText" class="text-[10px] text-emerald-400 font-bold">0%</span>
         </div>
     </header>
 
@@ -124,27 +163,16 @@
     </main>
 
     <!-- State Kosong -->
-    <div id="emptyState" class="hidden flex-col items-center justify-center mt-24 text-center px-8">
-        <div class="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center mb-6 shadow-inner">
+    <div id="emptyState" class="hidden flex-col items-center justify-center mt-16 text-center px-6">
+        <div class="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center mb-6 shadow-inner relative">
             <i class="fas fa-dumbbell text-4xl text-slate-600"></i>
+            <div class="absolute -bottom-2 -right-2 bg-emerald-500 text-slate-900 text-xs font-black px-2 py-1 rounded-lg rotate-12">+XP</div>
         </div>
-        <h2 class="text-2xl font-black text-white mb-2">Mulai Perjalananmu</h2>
-        <p class="text-slate-400 text-sm mb-8">Tambahkan gerakan pertamamu dan capai target ototmu hari ini.</p>
+        <h2 class="text-2xl font-black text-white mb-2">Mulai Perjalanan Sigma-mu</h2>
+        <p class="text-slate-400 text-sm mb-8 leading-relaxed">Setiap rep menghasilkan XP. Semakin sering kamu latihan, semakin tinggi rank kamu. Buktikan kamu bukan cuma ngomong!</p>
         <button onclick="openModal()" class="btn-glow bg-emerald-500 text-slate-900 font-black px-8 py-4 rounded-2xl flex items-center gap-3">
             <i class="fas fa-plus"></i> Tambah Gerakan
         </button>
-    </div>
-
-    <!-- Rest Timer Overlay (Bottom Sheet) -->
-    <div id="restTimerSheet" class="fixed bottom-0 left-0 w-full neo-glass rounded-t-[2rem] p-6 z-40 slide-up border-t border-emerald-500/30 flex flex-col items-center shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
-        <h3 class="text-emerald-400 font-bold uppercase tracking-widest text-xs mb-2">Waktu Istirahat</h3>
-        <div id="restTimeDisplay" class="text-6xl font-black text-white tabular-nums tracking-tighter mb-4 drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]">
-            01:00
-        </div>
-        <div class="flex gap-4 w-full">
-            <button onclick="addRestTime(30)" class="flex-1 bg-slate-800 text-slate-300 py-3 rounded-xl font-bold text-sm active:scale-95 transition-all shadow-inner">+30d</button>
-            <button onclick="skipRest()" class="flex-2 bg-emerald-500 text-slate-900 py-3 px-8 rounded-xl font-black text-sm active:scale-95 transition-all btn-glow w-full">Lewati Istirahat</button>
-        </div>
     </div>
 
     <!-- Floating Action Button -->
@@ -152,40 +180,140 @@
         <i class="fas fa-plus"></i>
     </button>
 
-    <!-- Custom Modal Confirm -->
-    <div id="confirmModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[60] hidden flex-col items-center justify-center px-4 opacity-0 transition-opacity duration-300">
-        <div class="bg-slate-800 rounded-[2rem] w-full max-w-sm p-6 shadow-2xl text-center transform scale-95 transition-transform duration-300 border border-slate-700" id="confirmContent">
-            <div class="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                <i class="fas fa-exclamation-triangle text-2xl"></i>
+    <!-- FOCUS MODE FULLSCREEN (Fitur Baru) -->
+    <div id="focusModeOverlay" class="fixed inset-0 bg-slate-950 z-[60] hidden flex-col items-center justify-between py-12 px-6 opacity-0 transition-opacity duration-300">
+        <!-- Background elements -->
+        <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-emerald-900/20 via-slate-950 to-slate-950 -z-10"></div>
+        
+        <!-- Header Focus -->
+        <div class="w-full flex justify-between items-center relative z-20">
+            <div>
+                <h2 id="focusExName" class="text-3xl font-black text-white uppercase tracking-tight">Push Up</h2>
+                <div id="focusSetBadge" class="inline-block mt-2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest">
+                    SET 1 / 3
+                </div>
             </div>
+            <button onclick="closeFocus()" class="w-12 h-12 rounded-full bg-slate-800 text-gray-400 flex items-center justify-center hover:text-white active:scale-90 transition-all">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+
+        <!-- Massive Tap Area & Counter -->
+        <div class="tap-area flex-1 flex flex-col justify-center items-center w-full my-8 relative" onclick="focusTapRep()">
+            <div class="text-emerald-500/10 text-[12px] font-bold uppercase tracking-[0.5em] mb-4 text-center absolute top-10 pointer-events-none">Tap di mana saja<br>untuk +1 Rep</div>
+            
+            <div class="relative">
+                <span id="focusRepCount" class="text-[150px] font-black text-white leading-none tracking-tighter drop-shadow-[0_0_30px_rgba(52,211,153,0.2)] transition-all duration-100">0</span>
+            </div>
+            
+            <div class="text-slate-500 font-bold mt-2">
+                <span class="text-3xl">/ <span id="focusTargetReps">10</span></span>
+                <span class="text-sm uppercase tracking-widest ml-1">reps</span>
+            </div>
+        </div>
+
+        <!-- Progress Bar Bawah -->
+        <div class="w-full relative z-20 mb-8">
+            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                <div id="focusProgressBar" class="h-full bg-emerald-400 progress-bar-fill w-0 shadow-[0_0_10px_rgba(52,211,153,0.5)]"></div>
+            </div>
+        </div>
+
+        <!-- Controls Focus Mode -->
+        <div class="w-full grid grid-cols-3 gap-3 relative z-20">
+            <button onclick="focusAction(-1, event)" class="bg-slate-800 text-slate-400 rounded-2xl py-5 font-bold text-xl active:scale-95 transition-transform"><i class="fas fa-minus"></i></button>
+            <button onclick="focusAction(5, event)" class="bg-emerald-900/30 border border-emerald-500/30 text-emerald-400 rounded-2xl py-5 font-black text-xl active:scale-95 transition-transform">+5</button>
+            <button onclick="focusAction('max', event)" class="bg-emerald-500 text-slate-900 btn-glow rounded-2xl py-5 font-black text-xl uppercase active:scale-95 transition-transform">MAX</button>
+        </div>
+    </div>
+
+    <!-- Rest Timer Overlay (Bottom Sheet) -->
+    <div id="restTimerSheet" class="fixed bottom-0 left-0 w-full neo-glass rounded-t-[2rem] p-6 z-[70] slide-up border-t border-emerald-500/30 flex flex-col items-center shadow-[0_-20px_50px_rgba(0,0,0,0.7)]">
+        <h3 class="text-emerald-400 font-bold uppercase tracking-widest text-xs mb-2"><i class="fas fa-bed mr-1"></i> Waktu Istirahat</h3>
+        <div id="restTimeDisplay" class="text-6xl font-black text-white tabular-nums tracking-tighter mb-4 drop-shadow-[0_0_15px_rgba(52,211,153,0.3)]">
+            01:00
+        </div>
+        <div class="flex gap-4 w-full">
+            <button onclick="addRestTime(30)" class="flex-1 bg-slate-800 text-slate-300 py-3 rounded-xl font-bold text-sm active:scale-95 transition-all shadow-inner">+30d</button>
+            <button onclick="skipRest()" class="flex-2 bg-emerald-500 text-slate-900 py-3 px-8 rounded-xl font-black text-sm active:scale-95 transition-all btn-glow w-full">Gas Lagi!</button>
+        </div>
+    </div>
+
+    <!-- TUTORIAL MODAL (Fitur Baru) -->
+    <div id="tutorialModal" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[80] hidden flex-col items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-slate-800 rounded-[2rem] w-full max-w-sm p-6 shadow-2xl border border-slate-700 relative overflow-hidden">
+            <div class="absolute -right-10 -top-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl"></div>
+            
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                    <i class="fas fa-book-open"></i>
+                </div>
+                <h2 class="text-2xl font-black text-white">Cara Jadi Sigma 🗿</h2>
+                <p class="text-slate-400 text-sm mt-2">Panduan singkat maksimalkan latihanmu.</p>
+            </div>
+
+            <div class="space-y-4 text-sm text-slate-300 mb-8">
+                <div class="flex items-start gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
+                    <i class="fas fa-plus-circle text-emerald-400 mt-1"></i>
+                    <p><strong>1. Buat Gerakan:</strong> Tambahkan target gerakan, reps, dan set harianmu.</p>
+                </div>
+                <div class="flex items-start gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
+                    <i class="fas fa-expand text-blue-400 mt-1"></i>
+                    <p><strong>2. Focus Mode:</strong> Pencet "Mulai Fokus" biar layar penuh. Tap layar gede-gede buat nambah rep!</p>
+                </div>
+                <div class="flex items-start gap-3 bg-slate-900/50 p-3 rounded-xl border border-slate-700/50">
+                    <i class="fas fa-star text-yellow-400 mt-1"></i>
+                    <p><strong>3. Push Rank (FOMO):</strong> Setiap rep = XP. Kumpulin XP buat naik rank dari Pemula sampai Sigma!</p>
+                </div>
+            </div>
+
+            <button onclick="closeTutorial()" class="w-full bg-emerald-500 text-slate-900 font-black py-4 rounded-xl active:scale-95 transition-all btn-glow">
+                SIAP, PAHAM!
+            </button>
+        </div>
+    </div>
+
+    <!-- RANK UP CELEBRATION MODAL -->
+    <div id="rankUpModal" class="fixed inset-0 bg-slate-900/95 backdrop-blur-xl z-[90] hidden flex-col items-center justify-center p-4 opacity-0 transition-opacity duration-500">
+        <div class="text-center transform scale-50 transition-transform duration-500" id="rankUpContent">
+            <h3 class="text-emerald-400 font-bold uppercase tracking-[0.3em] mb-2 animate-bounce">NAIK PANGKAT!</h3>
+            <div id="rankUpIcon" class="text-8xl mb-6 filter drop-shadow-[0_0_30px_rgba(255,215,0,0.5)]">🏆</div>
+            <h1 class="text-5xl font-black text-white mb-2 leading-tight">Level Up ke<br><span id="rankUpName" class="text-sigma text-6xl block mt-2">SIGMA 🗿</span></h1>
+            <p class="text-slate-400 mt-4 mb-8 text-lg">Usahamu terbayar. Pertahankan terus konsistensimu!</p>
+            
+            <button onclick="closeRankUp()" class="bg-white text-slate-900 px-10 py-4 rounded-full font-black tracking-wide shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-95 transition-all">
+                MANTAP!
+            </button>
+        </div>
+    </div>
+
+    <!-- Custom Modal Confirm & Add Exercise (Disembunyikan di bawah untuk kerapian) -->
+    <div id="confirmModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[80] hidden flex-col items-center justify-center px-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-slate-800 rounded-[2rem] w-full max-w-sm p-6 shadow-2xl text-center border border-slate-700" id="confirmContent">
+            <div class="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4"><i class="fas fa-exclamation-triangle text-2xl"></i></div>
             <h3 id="confirmTitle" class="text-xl font-black mb-2">Konfirmasi</h3>
             <p id="confirmText" class="text-slate-400 text-sm mb-6">Apakah Anda yakin?</p>
             <div class="flex gap-3">
                 <button onclick="closeConfirm()" class="flex-1 bg-slate-700 text-white py-4 rounded-xl font-bold active:scale-95 transition-all">Batal</button>
-                <button id="confirmYesBtn" class="flex-1 bg-red-500 text-white py-4 rounded-xl font-bold active:scale-95 transition-all shadow-[0_0_15px_rgba(239,68,68,0.4)]">Ya, Hapus</button>
+                <button id="confirmYesBtn" class="flex-1 bg-red-500 text-white py-4 rounded-xl font-bold active:scale-95 transition-all shadow-[0_0_15px_rgba(239,68,68,0.4)]">Ya</button>
             </div>
         </div>
     </div>
 
-    <!-- Modal Tambah Gerakan -->
-    <div id="addModal" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[50] hidden flex-col items-center justify-end sm:justify-center transition-opacity duration-300 opacity-0">
+    <div id="addModal" class="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[80] hidden flex-col items-center justify-end sm:justify-center transition-opacity duration-300 opacity-0">
         <div class="bg-slate-800 rounded-t-[2rem] sm:rounded-[2rem] w-full max-w-md p-6 sm:p-8 shadow-2xl transform translate-y-full sm:translate-y-0 sm:scale-95 transition-all duration-300 border-t sm:border border-slate-700" id="modalContent">
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-2xl font-black">Gerakan Baru</h2>
-                <button onclick="closeModal()" class="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center text-gray-400 hover:text-white active:scale-90">
-                    <i class="fas fa-times"></i>
-                </button>
+                <button onclick="closeModal()" class="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center text-gray-400 hover:text-white active:scale-90"><i class="fas fa-times"></i></button>
             </div>
-            
             <div class="space-y-5">
                 <div>
                     <label class="block text-slate-400 text-xs font-bold uppercase tracking-wider mb-2 ml-1">Nama Latihan</label>
-                    <input type="text" id="exName" placeholder="Contoh: Pull Up" class="w-full bg-slate-900 border border-slate-700 text-white rounded-2xl px-5 py-4 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-lg shadow-inner placeholder-slate-600 transition-all">
+                    <input type="text" id="exName" placeholder="Contoh: Push Up" class="w-full bg-slate-900 border border-slate-700 text-white rounded-2xl px-5 py-4 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-lg shadow-inner placeholder-slate-600 transition-all">
                 </div>
-                
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-slate-400 text-xs font-bold uppercase tracking-wider mb-2 ml-1">Reps per Set</label>
+                        <label class="block text-slate-400 text-xs font-bold uppercase tracking-wider mb-2 ml-1">Reps / Set</label>
                         <input type="number" id="exReps" value="10" min="1" class="w-full bg-slate-900 border border-slate-700 text-white rounded-2xl px-5 py-4 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-2xl font-black text-center shadow-inner transition-all">
                     </div>
                     <div>
@@ -194,37 +322,29 @@
                     </div>
                 </div>
             </div>
-            
-            <button onclick="saveNewExercise()" class="w-full mt-8 bg-emerald-500 text-slate-900 font-black rounded-2xl py-4 text-lg active:scale-95 transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)]">
-                Simpan & Mulai
-            </button>
+            <button onclick="saveNewExercise()" class="w-full mt-8 bg-emerald-500 text-slate-900 font-black rounded-2xl py-4 text-lg active:scale-95 transition-all btn-glow">Simpan & Mulai</button>
         </div>
     </div>
 
-    <!-- Workout Summary Overlay -->
-    <div id="summaryOverlay" class="fixed inset-0 bg-slate-900 z-[70] hidden flex-col items-center justify-center p-6 opacity-0 transition-opacity duration-1000">
+    <!-- Workout Summary -->
+    <div id="summaryOverlay" class="fixed inset-0 bg-slate-900 z-[85] hidden flex-col items-center justify-center p-6 opacity-0 transition-opacity duration-1000">
         <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20"></div>
         <div class="relative z-10 text-center flex flex-col items-center">
             <div class="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center mb-6 shadow-[0_0_50px_rgba(16,185,129,0.6)] animate-bounce">
                 <i class="fas fa-trophy text-5xl text-slate-900"></i>
             </div>
             <h1 class="text-4xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-200">WORKOUT SELESAI!</h1>
-            <p class="text-slate-400 mb-8">Kerja bagus! Anda telah menyelesaikan semua target hari ini.</p>
+            <p class="text-slate-400 mb-6">Kerja bagus! Ototmu makin kuat hari ini.</p>
             
-            <div class="grid grid-cols-2 gap-4 w-full max-w-xs mb-8">
-                <div class="neo-glass p-4 rounded-2xl">
-                    <p class="text-xs text-slate-400 uppercase font-bold mb-1">Total Waktu</p>
-                    <p id="summaryTime" class="text-xl font-black text-emerald-400">00:00</p>
-                </div>
-                <div class="neo-glass p-4 rounded-2xl">
-                    <p class="text-xs text-slate-400 uppercase font-bold mb-1">Total Set</p>
-                    <p id="summarySets" class="text-xl font-black text-emerald-400">0</p>
-                </div>
+            <div class="neo-glass p-6 rounded-[2rem] w-full max-w-xs mb-8 border border-emerald-500/30">
+                <p class="text-xs text-slate-400 uppercase font-bold mb-1">Total Waktu</p>
+                <p id="summaryTime" class="text-3xl font-black text-emerald-400 mb-4">00:00</p>
+                <div class="h-[1px] w-full bg-slate-700 mb-4"></div>
+                <p class="text-xs text-slate-400 uppercase font-bold mb-1">XP Diperoleh</p>
+                <p id="summaryXP" class="text-2xl font-black text-yellow-400">+0 XP</p>
             </div>
             
-            <button onclick="closeSummary()" class="bg-white text-slate-900 px-10 py-4 rounded-full font-black tracking-wide shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-95 transition-all">
-                TUTUP
-            </button>
+            <button onclick="closeSummary()" class="bg-white text-slate-900 px-10 py-4 rounded-full font-black tracking-wide shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-95 transition-all">TUTUP</button>
         </div>
     </div>
 
@@ -235,55 +355,114 @@
         
         function initAudio() {
             if(audioInitialized) return;
-            Tone.start();
-            // Synthesizer futuristik
-            synth = new Tone.PolySynth(Tone.FMSynth).toDestination();
-            synth.set({
-                harmonicity: 3,
-                modulationIndex: 10,
-                oscillator: { type: "sine" },
-                modulation: { type: "square" },
-                envelope: { attack: 0.01, decay: 0.1, sustain: 0.1, release: 0.5 }
-            });
-            audioInitialized = true;
+            try {
+                Tone.start();
+                synth = new Tone.PolySynth(Tone.FMSynth).toDestination();
+                synth.set({
+                    harmonicity: 3, modulationIndex: 10,
+                    oscillator: { type: "sine" }, modulation: { type: "square" },
+                    envelope: { attack: 0.01, decay: 0.1, sustain: 0.1, release: 0.5 }
+                });
+                audioInitialized = true;
+            } catch(e) { console.log("Audio skipped"); }
         }
 
         function playSound(type) {
             if(!audioInitialized || !synth) return;
             const now = Tone.now();
-            if(type === 'rep') {
-                synth.triggerAttackRelease("C5", "32n", now);
-            } else if (type === 'set') {
-                synth.triggerAttackRelease(["E5", "G5", "C6"], "8n", now);
-            } else if (type === 'finish') {
+            if(type === 'rep') synth.triggerAttackRelease("C5", "32n", now);
+            else if (type === 'set') synth.triggerAttackRelease(["E5", "G5", "C6"], "8n", now);
+            else if (type === 'finish') {
                 synth.triggerAttackRelease(["C5", "E5", "G5", "C6"], "4n", now);
                 setTimeout(() => synth.triggerAttackRelease(["C5", "E5", "G5", "E6"], "2n", Tone.now()), 300);
             } else if (type === 'timerEnd') {
                 synth.triggerAttackRelease("C6", "16n", now);
                 synth.triggerAttackRelease("C6", "16n", now + 0.2);
                 synth.triggerAttackRelease("C6", "8n", now + 0.4);
+            } else if (type === 'rankup') {
+                synth.triggerAttackRelease(["C4", "E4", "G4", "C5"], "2n", now);
+                synth.triggerAttackRelease(["E4", "G4", "C5", "E5"], "2n", now + 0.5);
+                synth.triggerAttackRelease(["G4", "C5", "E5", "G5"], "1n", now + 1);
             }
         }
 
-        // Inisialisasi audio pada tap pertama di mana saja
         document.body.addEventListener('pointerdown', initAudio, {once:true});
-
-        // --- HAPTIC FEEDBACK ---
-        function vibe(pattern) {
-            if ("vibrate" in navigator) navigator.vibrate(pattern);
-        }
+        function vibe(pattern) { if ("vibrate" in navigator) navigator.vibrate(pattern); }
 
         // --- STATE MANAGEMENT ---
         let exercises = JSON.parse(localStorage.getItem('sano_pro_exercises')) || [];
-        
-        // Timer Sesi
         let sessionSeconds = parseInt(localStorage.getItem('sano_pro_time')) || 0;
-        let sessionTimer = null;
-        let isSessionActive = false;
+        let sessionTimer = null, isSessionActive = false, restSeconds = 0, restInterval = null;
+        let sessionXPEarned = 0; // Track XP gained this specific session
 
-        // Rest Timer
-        let restSeconds = 0;
-        let restInterval = null;
+        // GAMIFICATION (RANK & XP)
+        let userXP = parseInt(localStorage.getItem('sano_pro_xp')) || 0;
+        
+        const RANKS = [
+            { threshold: 0, name: "Telor (Pemula)", color: "text-slate-400", bg: "bg-slate-800", icon: "fa-egg" },
+            { threshold: 100, name: "Bronze (Amatir)", color: "text-orange-400", bg: "bg-orange-900/30", icon: "fa-medal" },
+            { threshold: 500, name: "Silver (Pro)", color: "text-gray-300", bg: "bg-gray-700/50", icon: "fa-shield-alt" },
+            { threshold: 1500, name: "Gold (Expert)", color: "text-yellow-400", bg: "bg-yellow-900/30", icon: "fa-crown" },
+            { threshold: 3000, name: "Diamond (Master)", color: "text-cyan-400", bg: "bg-cyan-900/30", icon: "fa-gem" },
+            { threshold: 5000, name: "SIGMA 🗿", color: "text-sigma", bg: "bg-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]", icon: "fa-fire" }
+        ];
+
+        function getCurrentRank(xp) {
+            let current = RANKS[0];
+            for (let i = 0; i < RANKS.length; i++) {
+                if (xp >= RANKS[i].threshold) current = RANKS[i];
+            }
+            return current;
+        }
+
+        function getNextRank(xp) {
+            for (let i = 0; i < RANKS.length; i++) {
+                if (xp < RANKS[i].threshold) return RANKS[i];
+            }
+            return null; // Udah max
+        }
+
+        function updateXPUI() {
+            const rank = getCurrentRank(userXP);
+            const nextRank = getNextRank(userXP);
+            
+            document.getElementById('rankTitle').innerText = rank.name;
+            document.getElementById('rankTitle').className = rank.color;
+            document.getElementById('xpText').innerText = `${userXP} XP`;
+            
+            const iconEl = document.getElementById('rankIcon');
+            iconEl.innerHTML = `<i class="fas ${rank.icon}"></i>`;
+            iconEl.className = `p-2.5 rounded-xl shadow-inner text-xl w-11 h-11 flex items-center justify-center transition-all duration-500 ${rank.color.replace('text-', 'text-')} ${rank.bg}`;
+
+            if(nextRank) {
+                const prevThreshold = rank.threshold;
+                const range = nextRank.threshold - prevThreshold;
+                const currentProgress = userXP - prevThreshold;
+                const percent = (currentProgress / range) * 100;
+                
+                document.getElementById('xpProgressBar').style.width = `${percent}%`;
+                document.getElementById('xpToNextText').innerText = `${nextRank.threshold - userXP} lagi ke ${nextRank.name.split(' ')[0]}`;
+            } else {
+                document.getElementById('xpProgressBar').style.width = `100%`;
+                document.getElementById('xpProgressBar').className = "h-full w-full bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500";
+                document.getElementById('xpToNextText').innerText = "MAX RANK ACHIEVED";
+            }
+        }
+
+        function addXP(amount) {
+            if(amount <= 0) return;
+            const oldRank = getCurrentRank(userXP);
+            userXP += amount;
+            sessionXPEarned += amount;
+            localStorage.setItem('sano_pro_xp', userXP);
+            
+            const newRank = getCurrentRank(userXP);
+            updateXPUI();
+
+            if (newRank.threshold > oldRank.threshold) {
+                showRankUp(newRank);
+            }
+        }
 
         // --- CORE LOGIC ---
         function startSession() {
@@ -297,44 +476,27 @@
             }
         }
 
-        function formatTime(totalSeconds) {
-            const h = Math.floor(totalSeconds / 3600);
-            const m = Math.floor((totalSeconds % 3600) / 60);
-            const s = totalSeconds % 60;
-            if(h > 0) return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
-            return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        function formatTime(s) {
+            const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+            return h > 0 ? `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}` : `${m.toString().padStart(2,'0')}:${sec.toString().padStart(2,'0')}`;
         }
 
-        function updateGlobalTimer() {
-            document.getElementById('globalTimerDisplay').innerHTML = `<i class="far fa-clock"></i> ${formatTime(sessionSeconds)}`;
-        }
+        function updateGlobalTimer() { document.getElementById('globalTimerDisplay').innerHTML = `<i class="far fa-clock"></i> ${formatTime(sessionSeconds)}`; }
 
         function calculateProgress() {
             if(exercises.length === 0) return 0;
-            let totalTargetSets = 0;
-            let totalDoneSets = 0;
-
+            let target = 0, done = 0;
             exercises.forEach(ex => {
-                totalTargetSets += ex.targetSets;
-                // Jika sedang di set 2, berarti set 1 sudah selesai. Kecuali jika sudah max
-                const isMax = ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps;
-                let completed = ex.currentSet - 1;
-                if (isMax) completed = ex.targetSets;
-                totalDoneSets += completed;
+                target += ex.targetSets;
+                done += (ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps) ? ex.targetSets : ex.currentSet - 1;
             });
-
-            return (totalDoneSets / totalTargetSets) * 100;
+            return (done / target) * 100;
         }
 
         function updateProgressUI() {
             const progress = calculateProgress();
             document.getElementById('overallProgressBar').style.width = `${progress}%`;
-            document.getElementById('overallProgressText').innerText = `${Math.round(progress)}%`;
-
-            // Cek apakah workout selesai semua
-            if(progress === 100 && exercises.length > 0) {
-                setTimeout(showSummary, 1000);
-            }
+            if(progress === 100 && exercises.length > 0) setTimeout(showSummary, 1000);
         }
 
         function saveData() {
@@ -344,21 +506,13 @@
 
         // --- UI RENDERING ---
         function renderExercises() {
-            const container = document.getElementById('exerciseContainer');
-            const emptyState = document.getElementById('emptyState');
-            const fab = document.getElementById('addExerciseFab');
-            
+            const container = document.getElementById('exerciseContainer'), emptyState = document.getElementById('emptyState'), fab = document.getElementById('addExerciseFab');
             container.innerHTML = '';
             
             if (exercises.length === 0) {
-                emptyState.classList.remove('hidden');
-                emptyState.classList.add('flex');
-                fab.classList.add('hidden'); // Sembunyikan FAB jika layar kosong sudah ada tombol besar
+                emptyState.classList.remove('hidden'); emptyState.classList.add('flex'); fab.classList.add('hidden');
             } else {
-                emptyState.classList.add('hidden');
-                emptyState.classList.remove('flex');
-                fab.classList.remove('hidden');
-                
+                emptyState.classList.add('hidden'); emptyState.classList.remove('flex'); fab.classList.remove('hidden');
                 exercises.forEach(ex => {
                     const isDone = ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps;
                     const repPercent = (ex.currentRep / ex.targetReps) * 100;
@@ -390,42 +544,88 @@
                             </div>
                         </div>
                         
-                        <!-- Mini Progress Line -->
                         <div class="w-full h-1.5 bg-slate-800 rounded-full mt-2 mb-5 overflow-hidden">
                             <div id="bar-${ex.id}" class="h-full bg-emerald-400 progress-bar-fill" style="width: ${isDone ? 100 : repPercent}%"></div>
                         </div>
                         
-                        <!-- Controls -->
-                        <div class="grid grid-cols-4 gap-2 relative z-10">
-                            <button onclick="modifyRep(${ex.id}, -1)" class="col-span-1 bg-slate-800 active:bg-slate-700 text-slate-400 rounded-2xl h-14 flex items-center justify-center text-xl touch-manipulation no-select active:scale-95 transition-transform">
-                                <i class="fas fa-minus"></i>
+                        <!-- Focus Button Layer -->
+                        <div class="w-full relative z-10">
+                            <button onclick="openFocus(${ex.id})" class="w-full bg-slate-800 border border-slate-700 text-white rounded-2xl h-14 flex items-center justify-center font-bold tracking-wide active:scale-95 transition-all hover:bg-slate-700 ${isDone ? 'hidden' : ''}">
+                                <i class="fas fa-expand mr-2 text-emerald-400"></i> Mulai Fokus
                             </button>
-                            <button onclick="modifyRep(${ex.id}, 5)" class="col-span-1 bg-emerald-900/20 border border-emerald-500/20 text-emerald-400 active:bg-emerald-800/40 rounded-2xl h-14 flex items-center justify-center font-bold text-lg touch-manipulation no-select active:scale-95 transition-transform" ${isDone ? 'disabled opacity-50' : ''}>
-                                +5
-                            </button>
-                            <button onclick="forceFinishSet(${ex.id})" class="col-span-1 bg-emerald-900/20 border border-emerald-500/20 text-emerald-400 active:bg-emerald-800/40 rounded-2xl h-14 flex items-center justify-center font-bold text-xs uppercase tracking-widest touch-manipulation no-select active:scale-95 transition-transform" ${isDone ? 'disabled opacity-50' : ''}>
-                                Max
-                            </button>
-                            <button onclick="modifyRep(${ex.id}, 1)" id="btnMain-${ex.id}" class="col-span-1 ${isDone ? 'bg-slate-800 text-slate-600' : 'bg-emerald-500 text-slate-900 btn-glow shadow-[0_0_15px_rgba(16,185,129,0.3)]'} rounded-2xl h-14 flex items-center justify-center text-2xl touch-manipulation no-select transition-all" ${isDone ? 'disabled' : ''}>
-                                <i class="fas fa-plus"></i>
-                            </button>
+                            <div class="${isDone ? 'text-center text-emerald-400 font-bold text-sm uppercase tracking-widest py-3' : 'hidden'}"><i class="fas fa-check-circle mr-1"></i> Latihan Selesai</div>
                         </div>
                         
-                        <!-- Progress Background overlay -->
                         <div class="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-300 transition-all duration-500" style="width: ${isDone ? 100 : repPercent}%; opacity: 0.3;"></div>
                     `;
                     container.appendChild(card);
                 });
             }
-            updateGlobalTimer();
-            updateProgressUI();
+            updateGlobalTimer(); updateProgressUI(); updateXPUI();
+        }
+
+        // --- FOCUS MODE SYSTEM ---
+        let currentFocusId = null;
+        const focusOverlay = document.getElementById('focusModeOverlay');
+
+        window.openFocus = function(id) {
+            initAudio(); startSession();
+            currentFocusId = id;
+            updateFocusUI();
+            
+            focusOverlay.classList.remove('hidden');
+            focusOverlay.classList.add('flex');
+            setTimeout(() => focusOverlay.classList.remove('opacity-0'), 10);
+            vibe(50);
+        }
+
+        window.closeFocus = function() {
+            focusOverlay.classList.add('opacity-0');
+            setTimeout(() => {
+                focusOverlay.classList.add('hidden');
+                focusOverlay.classList.remove('flex');
+                currentFocusId = null;
+            }, 300);
+        }
+
+        function updateFocusUI() {
+            if(!currentFocusId) return;
+            const ex = exercises.find(e => e.id === currentFocusId);
+            if(!ex) return closeFocus();
+
+            document.getElementById('focusExName').innerText = ex.name;
+            document.getElementById('focusSetBadge').innerText = `SET ${ex.currentSet} / ${ex.targetSets}`;
+            
+            const repEl = document.getElementById('focusRepCount');
+            repEl.innerText = ex.currentRep;
+            repEl.classList.remove('pop-anim'); void repEl.offsetWidth; repEl.classList.add('pop-anim');
+            
+            document.getElementById('focusTargetReps').innerText = ex.targetReps;
+            
+            const percent = (ex.currentRep / ex.targetReps) * 100;
+            document.getElementById('focusProgressBar').style.width = `${percent}%`;
+
+            // Auto close if done
+            if (ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps) {
+                setTimeout(closeFocus, 1500); // Tunggu bentar lihat angka max
+            }
+        }
+
+        window.focusTapRep = function() {
+            if(!currentFocusId) return;
+            modifyRep(currentFocusId, 1);
+        }
+
+        window.focusAction = function(action, event) {
+            event.stopPropagation(); // Mencegah tap-area ketrigger
+            if(!currentFocusId) return;
+            if (action === 'max') forceFinishSet(currentFocusId);
+            else modifyRep(currentFocusId, action);
         }
 
         // --- ACTIONS ---
         window.modifyRep = function(id, amount) {
-            initAudio();
-            startSession();
-            
+            initAudio(); startSession();
             const ex = exercises.find(e => e.id === id);
             if(!ex) return;
             
@@ -434,292 +634,159 @@
 
             let newRep = ex.currentRep + amount;
 
-            if (amount > 0) { // Increment
-                if (newRep >= ex.targetReps) {
-                    forceFinishSet(id);
-                } else {
+            if (amount > 0) { 
+                if (newRep >= ex.targetReps) forceFinishSet(id);
+                else {
                     ex.currentRep = newRep;
-                    vibe(40);
-                    playSound('rep');
-                    updateCardUI(id);
+                    addXP(amount); // Gamification: +1 XP per rep
+                    vibe(40); playSound('rep');
+                    updateCardUI(id); if(currentFocusId === id) updateFocusUI();
                     saveData();
                 }
             } else { // Decrement (-1)
                 if (ex.currentRep > 0) {
-                    ex.currentRep -= 1;
-                    vibe(20);
-                    updateCardUI(id);
-                    saveData();
-                } else if (ex.currentSet > 1) {
-                    ex.currentSet -= 1;
-                    ex.currentRep = ex.targetReps - 1;
-                    vibe(20);
-                    updateCardUI(id);
+                    ex.currentRep -= 1; vibe(20);
+                    updateCardUI(id); if(currentFocusId === id) updateFocusUI();
                     saveData();
                 }
             }
         }
 
         window.forceFinishSet = function(id) {
-            initAudio();
-            startSession();
+            initAudio(); startSession();
             const ex = exercises.find(e => e.id === id);
             if(!ex) return;
             
             if (ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps) return;
 
+            const remainingReps = ex.targetReps - ex.currentRep;
+            addXP(remainingReps + 20); // Tambah sisa reps + Bonus Set 20 XP
+
             if (ex.currentSet < ex.targetSets) {
-                ex.currentSet += 1;
-                ex.currentRep = 0;
-                vibe([50, 50, 50]);
-                playSound('set');
-                startRestTimer(60); // Default 60s rest
+                ex.currentSet += 1; ex.currentRep = 0;
+                vibe([50, 50, 50]); playSound('set');
+                startRestTimer(60);
             } else {
                 ex.currentRep = ex.targetReps;
-                vibe([100, 50, 100, 50, 100]);
-                playSound('finish');
+                addXP(50); // Bonus menyelesaikan Full Exercise (Semua set)
+                vibe([100, 50, 100, 50, 100]); playSound('finish');
             }
             
-            updateCardUI(id, true);
+            updateCardUI(id, true); if(currentFocusId === id) updateFocusUI();
             saveData();
-            
-            // Re-render to update disabled states if maxed out
-            if(ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps) {
-                setTimeout(renderExercises, 400);
-            }
+            if(ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps) setTimeout(renderExercises, 400);
         }
 
-        // Update sebagian UI tanpa render ulang keseluruhan (lebih smooth)
-        function updateCardUI(id, triggerSetAnim = false) {
+        function updateCardUI(id) {
             const ex = exercises.find(e => e.id === id);
             if(!ex) return;
-
             const isDone = ex.currentSet === ex.targetSets && ex.currentRep === ex.targetReps;
             const percent = (ex.currentRep / ex.targetReps) * 100;
 
-            // Update Angka dengan animasi pop
             const repEl = document.getElementById(`rep-${id}`);
-            if(repEl) {
-                repEl.innerText = ex.currentRep;
-                repEl.classList.remove('pop-anim');
-                void repEl.offsetWidth; // trigger reflow
-                repEl.classList.add('pop-anim');
-            }
+            if(repEl) { repEl.innerText = ex.currentRep; repEl.classList.remove('pop-anim'); void repEl.offsetWidth; repEl.classList.add('pop-anim'); }
 
-            // Update Bar
             const barEl = document.getElementById(`bar-${id}`);
             if(barEl) barEl.style.width = `${isDone ? 100 : percent}%`;
 
-            // Update Badge
             const badgeEl = document.getElementById(`badge-${id}`);
             if(badgeEl) {
-                if(isDone) {
-                    badgeEl.innerHTML = '<i class="fas fa-check mr-1"></i> DONE';
-                    badgeEl.className = 'bg-emerald-500 text-slate-900 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest transition-colors';
-                } else {
-                    badgeEl.innerHTML = `SET ${ex.currentSet} / ${ex.targetSets}`;
-                    badgeEl.className = 'bg-slate-800 text-emerald-400 border border-slate-700 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest transition-colors';
-                }
+                badgeEl.innerHTML = isDone ? '<i class="fas fa-check mr-1"></i> DONE' : `SET ${ex.currentSet} / ${ex.targetSets}`;
+                badgeEl.className = isDone ? 'bg-emerald-500 text-slate-900 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest transition-colors' : 'bg-slate-800 text-emerald-400 border border-slate-700 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest transition-colors';
             }
-
-            // Update Card Background jika selesai
             const cardEl = document.getElementById(`card-${id}`);
-            if(cardEl) {
-                if(isDone) cardEl.classList.add('neo-glass-done');
-                else cardEl.classList.remove('neo-glass-done');
-            }
+            if(cardEl) isDone ? cardEl.classList.add('neo-glass-done') : cardEl.classList.remove('neo-glass-done');
         }
 
-        // --- REST TIMER SYSTEM ---
-        const restSheet = document.getElementById('restTimerSheet');
-        const restDisplay = document.getElementById('restTimeDisplay');
-
+        // --- REST TIMER ---
+        const restSheet = document.getElementById('restTimerSheet'), restDisplay = document.getElementById('restTimeDisplay');
         function startRestTimer(seconds) {
-            restSeconds = seconds;
-            updateRestUI();
-            restSheet.classList.add('active');
-            
+            restSeconds = seconds; updateRestUI(); restSheet.classList.add('active');
             clearInterval(restInterval);
             restInterval = setInterval(() => {
-                restSeconds--;
-                updateRestUI();
-                
-                if(restSeconds <= 0) {
-                    endRest();
-                } else if (restSeconds <= 3) {
-                    vibe(200);
-                }
+                restSeconds--; updateRestUI();
+                if(restSeconds <= 0) endRest();
+                else if (restSeconds <= 3) vibe(200);
             }, 1000);
         }
-
         function updateRestUI() {
-            const m = Math.floor(restSeconds / 60);
-            const s = restSeconds % 60;
-            restDisplay.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
-            if(restSeconds <= 10) restDisplay.classList.add('text-red-400', 'animate-blink');
-            else restDisplay.classList.remove('text-red-400', 'animate-blink');
+            restDisplay.innerText = `${Math.floor(restSeconds / 60).toString().padStart(2,'0')}:${(restSeconds % 60).toString().padStart(2,'0')}`;
+            restSeconds <= 10 ? restDisplay.classList.add('text-red-400', 'animate-blink') : restDisplay.classList.remove('text-red-400', 'animate-blink');
         }
-
         window.addRestTime = function(sec) { restSeconds += sec; updateRestUI(); vibe(30); }
-        
         window.skipRest = function() { endRest(false); vibe(30); }
-
         function endRest(auto = true) {
-            clearInterval(restInterval);
-            restSheet.classList.remove('active');
-            if(auto) {
-                vibe([300, 100, 300]);
-                playSound('timerEnd');
-            }
+            clearInterval(restInterval); restSheet.classList.remove('active');
+            if(auto) { vibe([300, 100, 300]); playSound('timerEnd'); }
         }
 
-        // --- CUSTOM MODALS ---
-        let confirmAction = null;
-        const confirmModal = document.getElementById('confirmModal');
-
+        // --- MODALS (Delete, Reset, Add) ---
+        let confirmAction = null; const confirmModal = document.getElementById('confirmModal');
         window.reqDelete = function(id) {
-            const ex = exercises.find(e => e.id === id);
-            document.getElementById('confirmTitle').innerText = 'Hapus Gerakan?';
-            document.getElementById('confirmText').innerText = `Menghapus "${ex.name}" tidak bisa dibatalkan.`;
-            document.getElementById('confirmYesBtn').innerText = 'Hapus';
-            document.getElementById('confirmYesBtn').className = 'flex-1 bg-red-500 text-white py-4 rounded-xl font-bold active:scale-95 transition-all shadow-[0_0_15px_rgba(239,68,68,0.4)]';
-            
-            confirmAction = () => {
-                exercises = exercises.filter(e => e.id !== id);
-                saveData();
-                renderExercises();
-            };
+            document.getElementById('confirmTitle').innerText = 'Hapus?'; document.getElementById('confirmText').innerText = `Yakin hapus gerakan ini?`;
+            document.getElementById('confirmYesBtn').innerText = 'Hapus'; document.getElementById('confirmYesBtn').className = 'flex-1 bg-red-500 text-white py-4 rounded-xl font-bold active:scale-95 transition-all';
+            confirmAction = () => { exercises = exercises.filter(e => e.id !== id); saveData(); renderExercises(); };
             showConfirm();
         }
-
         window.reqResetAll = function() {
             if(exercises.length === 0) return;
-            document.getElementById('confirmTitle').innerText = 'Reset Semua Sesi?';
-            document.getElementById('confirmText').innerText = 'Semua hitungan rep dan set akan diulang dari nol.';
-            document.getElementById('confirmYesBtn').innerText = 'Reset';
-            document.getElementById('confirmYesBtn').className = 'flex-1 bg-orange-500 text-white py-4 rounded-xl font-bold active:scale-95 transition-all shadow-[0_0_15px_rgba(249,115,22,0.4)]';
-            
+            document.getElementById('confirmTitle').innerText = 'Reset Sesi?'; document.getElementById('confirmText').innerText = 'Rep & Set akan ulang dari 0. (XP aman)';
+            document.getElementById('confirmYesBtn').innerText = 'Reset'; document.getElementById('confirmYesBtn').className = 'flex-1 bg-orange-500 text-white py-4 rounded-xl font-bold active:scale-95 transition-all';
             confirmAction = () => {
                 exercises = exercises.map(ex => ({...ex, currentRep: 0, currentSet: 1}));
-                sessionSeconds = 0;
-                clearInterval(sessionTimer);
-                isSessionActive = false;
-                localStorage.setItem('sano_pro_time', 0);
-                saveData();
-                renderExercises();
+                sessionSeconds = 0; clearInterval(sessionTimer); isSessionActive = false; localStorage.setItem('sano_pro_time', 0); sessionXPEarned = 0;
+                saveData(); renderExercises();
             };
             showConfirm();
         }
+        function showConfirm() { confirmModal.classList.remove('hidden'); confirmModal.classList.add('flex'); setTimeout(() => { confirmModal.classList.remove('opacity-0'); document.getElementById('confirmContent').classList.remove('scale-95'); }, 10); }
+        window.closeConfirm = function() { confirmModal.classList.add('opacity-0'); document.getElementById('confirmContent').classList.add('scale-95'); setTimeout(() => { confirmModal.classList.add('hidden'); confirmModal.classList.remove('flex'); confirmAction = null; }, 300); }
+        document.getElementById('confirmYesBtn').addEventListener('click', () => { if(confirmAction) confirmAction(); closeConfirm(); vibe(50); });
 
-        function showConfirm() {
-            confirmModal.classList.remove('hidden');
-            confirmModal.classList.add('flex');
-            setTimeout(() => {
-                confirmModal.classList.remove('opacity-0');
-                document.getElementById('confirmContent').classList.remove('scale-95');
-            }, 10);
-        }
-
-        window.closeConfirm = function() {
-            confirmModal.classList.add('opacity-0');
-            document.getElementById('confirmContent').classList.add('scale-95');
-            setTimeout(() => {
-                confirmModal.classList.add('hidden');
-                confirmModal.classList.remove('flex');
-                confirmAction = null;
-            }, 300);
-        }
-
-        document.getElementById('confirmYesBtn').addEventListener('click', () => {
-            if(confirmAction) confirmAction();
-            closeConfirm();
-            vibe(50);
-        });
-
-        // --- ADD EXERCISE MODAL ---
-        const addModal = document.getElementById('addModal');
-        const modalContentAdd = document.getElementById('modalContent');
-        
-        window.openModal = function() {
-            initAudio();
-            addModal.classList.remove('hidden');
-            addModal.classList.add('flex');
-            setTimeout(() => {
-                addModal.classList.remove('opacity-0');
-                modalContentAdd.classList.remove('translate-y-full', 'sm:scale-95');
-                document.getElementById('exName').focus();
-            }, 10);
-        }
-
-        window.closeModal = function() {
-            addModal.classList.add('opacity-0');
-            modalContentAdd.classList.add('translate-y-full', 'sm:scale-95');
-            setTimeout(() => {
-                addModal.classList.add('hidden');
-                addModal.classList.remove('flex');
-                document.getElementById('exName').value = '';
-                document.getElementById('exReps').value = '10';
-                document.getElementById('exSets').value = '3';
-            }, 300);
-        }
-
+        // Add
+        const addModal = document.getElementById('addModal'), modalContentAdd = document.getElementById('modalContent');
+        window.openModal = function() { initAudio(); addModal.classList.remove('hidden'); addModal.classList.add('flex'); setTimeout(() => { addModal.classList.remove('opacity-0'); modalContentAdd.classList.remove('translate-y-full', 'sm:scale-95'); document.getElementById('exName').focus(); }, 10); }
+        window.closeModal = function() { addModal.classList.add('opacity-0'); modalContentAdd.classList.add('translate-y-full', 'sm:scale-95'); setTimeout(() => { addModal.classList.add('hidden'); addModal.classList.remove('flex'); document.getElementById('exName').value = ''; }, 300); }
         window.saveNewExercise = function() {
-            const name = document.getElementById('exName').value.trim();
-            const reps = parseInt(document.getElementById('exReps').value) || 10;
-            const sets = parseInt(document.getElementById('exSets').value) || 3;
-
+            const name = document.getElementById('exName').value.trim(), reps = parseInt(document.getElementById('exReps').value) || 10, sets = parseInt(document.getElementById('exSets').value) || 3;
             if (name) {
-                const newId = exercises.length > 0 ? Math.max(...exercises.map(ex => ex.id)) + 1 : 1;
-                exercises.push({
-                    id: newId,
-                    name: name,
-                    currentRep: 0,
-                    targetReps: reps,
-                    currentSet: 1,
-                    targetSets: sets
-                });
-                saveData();
-                renderExercises();
-                closeModal();
-                vibe(50);
+                exercises.push({ id: Date.now(), name, currentRep: 0, targetReps: reps, currentSet: 1, targetSets: sets });
+                saveData(); renderExercises(); closeModal(); vibe(50);
                 setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 300);
-            } else {
-                const input = document.getElementById('exName');
-                input.classList.add('border-red-500', 'ring-red-500');
-                vibe([30,30]);
-                setTimeout(() => input.classList.remove('border-red-500', 'ring-red-500'), 1000);
             }
         }
 
-        // --- WORKOUT SUMMARY ---
-        const summaryOverlay = document.getElementById('summaryOverlay');
+        // --- TUTORIAL & RANK UP ---
+        const tutorialModal = document.getElementById('tutorialModal');
+        window.openTutorial = function() { tutorialModal.classList.remove('hidden'); tutorialModal.classList.add('flex'); setTimeout(() => tutorialModal.classList.remove('opacity-0'), 10); }
+        window.closeTutorial = function() { tutorialModal.classList.add('opacity-0'); setTimeout(() => { tutorialModal.classList.add('hidden'); tutorialModal.classList.remove('flex'); }, 300); localStorage.setItem('sano_pro_tut', 'done'); }
         
-        function showSummary() {
-            playSound('finish');
-            clearInterval(sessionTimer);
-            isSessionActive = false;
+        const rankUpModal = document.getElementById('rankUpModal'), rankUpContent = document.getElementById('rankUpContent');
+        function showRankUp(rankObj) {
+            playSound('rankup'); vibe([200, 100, 200, 100, 500]);
+            document.getElementById('rankUpIcon').innerText = rankObj.icon.includes('fire') ? '🔥' : (rankObj.icon.includes('gem') ? '💎' : '🏆');
+            document.getElementById('rankUpName').innerText = rankObj.name;
+            document.getElementById('rankUpName').className = `text-6xl block mt-2 font-black ${rankObj.color}`;
             
-            let totalSets = exercises.reduce((sum, ex) => sum + ex.targetSets, 0);
-            document.getElementById('summaryTime').innerText = formatTime(sessionSeconds);
-            document.getElementById('summarySets').innerText = totalSets;
-            
-            summaryOverlay.classList.remove('hidden');
-            summaryOverlay.classList.add('flex');
-            setTimeout(() => { summaryOverlay.classList.remove('opacity-0'); }, 50);
+            rankUpModal.classList.remove('hidden'); rankUpModal.classList.add('flex');
+            setTimeout(() => { rankUpModal.classList.remove('opacity-0'); rankUpContent.classList.remove('scale-50'); confetti({particleCount: 150, spread: 100, origin: { y: 0.6 }, zIndex: 100}); }, 50);
         }
+        window.closeRankUp = function() { rankUpModal.classList.add('opacity-0'); rankUpContent.classList.add('scale-50'); setTimeout(() => { rankUpModal.classList.add('hidden'); rankUpModal.classList.remove('flex'); }, 500); }
 
-        window.closeSummary = function() {
-            summaryOverlay.classList.add('opacity-0');
-            setTimeout(() => {
-                summaryOverlay.classList.add('hidden');
-                summaryOverlay.classList.remove('flex');
-            }, 1000);
+        // --- SUMMARY ---
+        const summaryOverlay = document.getElementById('summaryOverlay');
+        function showSummary() {
+            playSound('finish'); clearInterval(sessionTimer); isSessionActive = false;
+            document.getElementById('summaryTime').innerText = formatTime(sessionSeconds);
+            document.getElementById('summaryXP').innerText = `+${sessionXPEarned} XP`;
+            summaryOverlay.classList.remove('hidden'); summaryOverlay.classList.add('flex'); setTimeout(() => { summaryOverlay.classList.remove('opacity-0'); confetti({particleCount: 100, spread: 70, origin: { y: 0.6 }, zIndex: 90}); }, 50);
         }
+        window.closeSummary = function() { summaryOverlay.classList.add('opacity-0'); setTimeout(() => { summaryOverlay.classList.add('hidden'); summaryOverlay.classList.remove('flex'); }, 1000); }
 
         // --- INIT ---
         renderExercises();
         if (sessionSeconds > 0) updateGlobalTimer();
-
+        if (!localStorage.getItem('sano_pro_tut')) setTimeout(openTutorial, 1000);
     </script>
 </body>
 </html>
